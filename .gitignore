@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.DS_Store
+.venv/
+dist/
+build/
+*.egg-info/
+runs/
+config.local.toml
+
+# CI scratch
+ci-source/
+ci-output/
+ci.toml

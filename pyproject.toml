@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "burn-before-reset"
+version = "0.1.0"
+description = "Turn expiring local AI quota into bounded, reviewable work before reset."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Steven CHAN" }]
+dependencies = []
+
+[project.scripts]
+bbr = "burn_before_reset.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# S = flake8-bandit. A tool that fails closed on billing and paths should not
+# resolve its own helper binaries through whatever PATH happens to hold.
+select = ["E", "F", "W", "I", "B", "S", "UP", "SIM", "ISC", "RUF"]
+ignore = [
+  "E501",    # line length: prose comments carry the reasoning and are worth the width
+  "S603",    # subprocess without shell=True is the safe form; that is the point
+  "S606",    # same
+  "SIM105",  # contextlib.suppress in process-termination paths would obscure which
+             # signal stage is being tolerated; the explicit try/except reads better
+             # where getting it wrong leaves a process alive
+  "ISC004",  # implicit concatenation inside a list is deliberate here
+  "RUF001",  # full-width punctuation appears on purpose in the CJK title cleaner
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S108", "S607"]
+"scripts/bbr.py" = ["E402"]

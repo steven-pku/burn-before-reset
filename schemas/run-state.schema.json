@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/OWNER/burn-before-reset/schemas/run-state.schema.json",
+  "title": "Burn Before Reset Run State",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "phase",
+    "created_at",
+    "reset_at",
+    "hard_stop_at",
+    "queue_sha256",
+    "task_status",
+    "completed",
+    "failed",
+    "stop_reason",
+    "source_mutation_detected",
+    "source_changed_paths",
+    "worker_errors",
+    "source_check_incomplete",
+    "billing_error_detected",
+    "quota_exhausted",
+    "guard_failure_detected",
+    "stop_unconfirmed_detected",
+    "task_results"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "phase": {
+      "enum": [
+        "frozen",
+        "execute",
+        "drain",
+        "stopped"
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "reset_at": {
+      "type": "string"
+    },
+    "hard_stop_at": {
+      "type": "string"
+    },
+    "queue_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "task_status": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "completed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stop_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_mutation_detected": {
+      "type": "boolean"
+    },
+    "source_changed_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "worker_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_check_incomplete": {
+      "type": "boolean"
+    },
+    "billing_error_detected": {
+      "type": "boolean"
+    },
+    "quota_exhausted": {
+      "type": "boolean",
+      "description": "The subscription allowance ran out. An ordinary end of a window, not a billing fault."
+    },
+    "guard_failure_detected": {
+      "type": "boolean"
+    },
+    "stop_unconfirmed_detected": {
+      "type": "boolean"
+    },
+    "task_results": {
+      "type": "object"
+    },
+    "finished_at": {
+      "type": "string"
+    }
+  }
+}

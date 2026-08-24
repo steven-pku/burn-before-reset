@@ -1,0 +1,7 @@
+interface:
+  display_name: "Burn Before Reset"
+  short_description: "Safely turn expiring quota into reviewable local work"
+  default_prompt: "Use $burn-before-reset to plan a safe, bounded local run before my quota reset."
+
+policy:
+  allow_implicit_invocation: true

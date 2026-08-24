@@ -1,0 +1,117 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check --output-format=github
+      - name: Lint the workflows themselves
+        uses: raven-actions/actionlint@v2
+
+  test:
+    name: ${{ matrix.os }} · Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Compile
+        run: python -m py_compile scripts/bbr.py src/burn_before_reset/*.py
+
+      - name: Unit and integration tests
+        env:
+          PYTHONPATH: src
+        run: python -m unittest discover -v
+
+      - name: Plan-only end-to-end
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # A real plan against a throwaway source root. No Worker, no model, no quota.
+          mkdir -p ci-source ci-output
+          printf '# Sample\n\nTODO: confirm the reporting path.\n' > ci-source/sample.md
+          SOURCE_SUM="$(python -c 'import hashlib,pathlib;print(hashlib.sha256(pathlib.Path("ci-source/sample.md").read_bytes()).hexdigest())')"
+
+          RESET_AT="$(python -c 'import datetime;print((datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=6)).isoformat())')"
+          SOURCE_ROOT="$(python -c 'import pathlib;print(pathlib.Path("ci-source").resolve())')"
+          OUTPUT_ROOT="$(python -c 'import pathlib;print(pathlib.Path("ci-output").resolve())')"
+
+          cat > ci.toml <<TOML
+          [run]
+          reset_at = "$RESET_AT"
+          safety_buffer_minutes = 15
+          drain_window_minutes = 30
+          mode = "safe"
+          output_root = "$OUTPUT_ROOT"
+
+          [billing]
+          subscription_auth_only = true
+          user_asserts_credit_balance_zero = true
+          user_asserts_auto_top_up_off = true
+          allow_api_key = false
+          allow_paid_credits = false
+          allow_provider_fallback = false
+
+          [execution]
+          enabled = false
+          codex_binary = "codex"
+          max_tasks = 3
+          task_timeout_seconds = 900
+          sigint_grace_seconds = 20
+          sigterm_grace_seconds = 10
+
+          [task_policy]
+          minimum_score = 12
+          maximum_risk = 2
+          maximum_human_dependency = 1
+          max_candidates = 50
+
+          [[sources]]
+          type = "markdown"
+          root = "$SOURCE_ROOT"
+          extensions = [".md"]
+          exclude_fragments = [".git"]
+          max_file_bytes = 262144
+          TOML
+
+          python scripts/bbr.py validate-config --config ci.toml
+          RUN_DIR="$(python scripts/bbr.py plan --config ci.toml)"
+          python scripts/bbr.py validate-run --run-dir "$RUN_DIR"
+
+          # `--execute` must still refuse with exit 2 while execution.enabled is false.
+          set +e
+          python scripts/bbr.py run --config ci.toml --execute
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "expected exit 2 from the execution gate, got $gate_status" >&2
+            exit 1
+          fi
+
+          # Planning must leave the source root byte-identical.
+          AFTER_SUM="$(python -c 'import hashlib,pathlib;print(hashlib.sha256(pathlib.Path("ci-source/sample.md").read_bytes()).hexdigest())')"
+          if [ "$SOURCE_SUM" != "$AFTER_SUM" ]; then
+            echo "planning modified the source root" >&2
+            exit 1
+          fi

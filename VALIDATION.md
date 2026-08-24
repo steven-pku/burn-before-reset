@@ -1,0 +1,304 @@
+# Burn Before Reset · Validation · 2026-08-24
+
+## Result
+
+Lifecycle is `candidate`. Implementation, structural checks, historical replay, controlled forward test, repository fresh-process discovery, and the post-audit safety repair suite passed. A pre-publication audit then reproduced four further defects; each was repaired with a regression test that fails against the previous behaviour, and one real Codex task subsequently ran end to end through the product adapter. `PROMOTION_GATE` stands at 1 of 3. The project is not installed globally, is not `verified`, and is not proven safe for unattended sensitive data.
+
+> This file is a ledger. Sections are appended in order. Earlier entries record what was true when they were written and are not rewritten; the pre-publication section at the end supersedes counts and gate states above it.
+
+## Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Python syntax | PASS | All files under `scripts/` and `src/burn_before_reset/` compiled. |
+| Unit/integration suite | PASS | 34 tests; config gates, path/symlink boundary, frozen contract, planner, fake worker, billing fail-close, artifact promotion, report, guard supervision, exception finalization, prompt boundary, and process-group watchdog. |
+| Skill structure | PASS | `skill-creator/scripts/quick_validate.py` returned `Skill is valid!`. |
+| Description budget | PASS | 60 characters total; first trigger sentence 22 characters. |
+| UI metadata | PASS | `short_description` is 53 characters and `default_prompt` explicitly names `$burn-before-reset`. |
+| Project status schema | PASS after correction | `health: yellow` was rejected; changed to allowed `amber`. |
+| Source mutation | PASS in tests/evals | Planner test preserved source bytes; read-only A/B directories contained only original fixture and intended Skill symlink after runs. |
+| End-to-end plan CLI | PASS | Real `validate-config` + `plan` + `validate-run` produced one source-linked task, frozen hash, and no source mutation. |
+| Execution double gate | PASS | `run --execute` returned exit 2 while `execution.enabled = false`; no Worker launched. |
+
+## Historical replay
+
+Automated replay covers:
+
+- Missing/naive/past deadline, buffer below ten minutes, and false billing assertions.
+- API-key environment present during execution.
+- Output/source overlap, secret-like files, excluded paths, and symlink escape.
+- Invalid Codex JSONL.
+- Frozen queue tampering.
+- Empty queue without invented work.
+- Billing/auth Worker error without retry/fallback.
+- Worker plus child process stopped as one process group.
+- Completed status requiring a non-empty artifact and final report.
+
+Result: PASS, 34/34 tests.
+
+## Post-audit safety repairs
+
+The pre-pilot audit exposed four execution blockers. Root reproduced each applicable failure before changing the implementation.
+
+- Guard lifecycle: the parent now supervises both Worker and guard, fails closed if the guard dies, waits for deadline escalation, cleans descendants, and records whether stop was actually observed.
+- Unconfirmed termination: SIGKILL without observed process-group termination is reported as `sigkill-unconfirmed`; it cannot be counted as success.
+- Exception finalization: Worker exceptions still produce structured task state, `STOP_REASON`, `MORNING_REPORT.md`, and run events.
+- Timing and prompt boundaries: execution is mechanically plan-only inside sixty minutes of the hard stop; Worker prompts omit source snippets and bracket locator fields as untrusted task data.
+
+Deterministic regressions cover stubborn descendants, premature guard death, Worker exceptions, stopped-run replay, missing artifacts, output-root escape, CLI nonzero stop status, and adversarial task metadata.
+
+Claude Opus 5 then identified one additional P1 false-success path: a zero-exit Worker without a completed `agent_message` could promote raw JSONL tail text as an artifact. Root reproduced the control-flow path and removed the fallback. Official artifacts are now promoted only after the full success predicate; failed Worker messages remain diagnostic evidence under the Worker directory. Rehashed queues also reject unsafe task IDs and deliverable traversal, runtime task roots are rebound to the configured sources and run directory, and exact sixty-minute boundary coverage was added.
+
+## Independent terminal review
+
+### Claude Opus 5
+
+- CLI: Claude Code 2.1.241.
+- Main model verified from result metadata: `claude-opus-5`, provider `firstParty`; no fallback model was configured.
+- Boundary: static, read-only review with only Read/Grep/Glob tools; no network requests, edits, test execution, or subagents.
+- Result: `PILOT_READY_WITH_RISKS` before the cited P1 was repaired.
+- Root disposition: accepted the P1 raw-event artifact finding and the rehashed path-boundary concern; repaired both. Also applied bounded P2 hardening for signal/liveness handling, failed-output isolation, default state fields, timeout budget, and exact boundary/CLI coverage. Final deterministic suite: 34/34 PASS.
+
+The CLI result reported `total_cost_usd: 0.6171295`; this is recorded as tool metadata, not interpreted as the user's final billing statement.
+
+### Kimi 3
+
+- CLI: Kimi Code 0.38.0 with requested model alias `kimi-code/k3-256k`.
+- Two bounded read-only attempts produced repeated `EINTR` errors while watching the local Kimi configuration files and no model or tool event.
+- The final narrowed attempt was stopped after five minutes and exited 137 after ignoring a normal termination signal.
+- Result: `AUDIT_INCONCLUSIVE`. No Kimi finding or approval is claimed.
+
+## Fresh-process discovery
+
+An actual new `codex debug prompt-input` process launched from the repository:
+
+- Advertised exactly one `burn-before-reset` entry.
+- Resolved it through `.agents/skills/burn-before-reset/SKILL.md`.
+- Preserved the full 60-character description.
+- Produced zero-byte startup stderr in the final debug run.
+
+The first discovery run exposed a symlink error: `../../..` resolved to `/private/tmp` and advertised unrelated temporary Skills. The link was corrected to `../..`; the second inventory contained only this repository Skill.
+
+## Controlled with-Skill / without-Skill A/B
+
+Two new isolated Git directories contained the same single fixture and received the same prompt. The only designed difference was one repository Skill symlink.
+
+Mechanical inventory:
+
+- with-Skill: exactly one `burn-before-reset` match.
+- without-Skill: zero matches.
+- both debug-process stderr files: zero bytes.
+
+Observed behavior:
+
+- with-Skill: refused Worker execution, applied the less-than-60-minute plan-only rule, required exact `reset_at`, zero Credits, Auto top-up off, subscription authentication, and a separate output root.
+- without-Skill: stopped only because the sample lacked the referenced implementation and old product note and the workspace was read-only. It did not introduce Credits, Auto top-up, subscription-auth, or hard-stop gates.
+
+Result: PASS. The Skill changed safety-relevant decisions rather than only changing wording.
+
+Actual model-process stderr also contained host-level warnings about shortened global Skill descriptions, existing session-state database discrepancies, and one shell-snapshot timeout. The candidate still appeared and executed its gate correctly. These warnings are recorded but not attributed to this repository.
+
+## Governance gates
+
+| Gate | Status | Basis |
+|---|---|---|
+| `HISTORICAL_REPLAY` | PASS | 34 deterministic tests, including post-audit regressions. |
+| `FORWARD_TEST` | PASS | Independent new-process, controlled A/B prompt. |
+| `READ_ONLY_DEFAULT` | PASS | Config default off; planner source preservation; A/B read-only. |
+| `FRESH_PROCESS_VERIFIED` | PASS | One inventory match, correct path, final debug stderr empty. |
+| `NO_FALSE_SUCCESS` | PASS | Empty queue, worker error, timeout/billing paths have explicit stop states. |
+| `SSOT_BOUNDARY` | PASS | Project, run root, source roots, frozen queue, and external actions are separated. |
+| `STATUS_DISCIPLINE` | PASS | Candidate, machine-verified, verified, released, and portable are distinct. |
+| `INDEPENDENT_TERMINAL_REVIEW` | DEGRADED | Claude Opus 5 completed and its P1 was fixed; Kimi 3 CLI remained unavailable after bounded attempts. |
+| `PROMOTION_GATE` | 1/3 | One real Codex task completed 2026-08-24; see the pre-publication section. |
+
+## Remaining risks
+
+1. Standard Codex sandbox modes do not establish a project-specific read allowlist. Do not use the execution pilot with sensitive home-directory roots.
+2. Credits balance and Auto top-up are user assertions. The local watchdog cannot guarantee server-side billing behavior or cancel already-submitted server work.
+3. The supervised process-group watchdog is validated locally, including stubborn descendants and guard death, but not across a real quota-reset event, system sleep/wake, or every supported Linux distribution.
+4. No real Codex task has run through the product adapter; fake-worker integration and read-only behavioral evals are not promotion evidence.
+5. Kimi 3 did not return a post-fix review because its local CLI stalled after file-watcher errors; independent terminal coverage therefore consists of Claude Opus 5 plus Root verification, not two completed reviewers.
+
+## Correction review
+
+- Correction: repository Skill symlink originally pointed one directory too high.
+- Evidence: fresh inventory advertised unrelated temporary Skills; corrected inventory showed one match.
+- Root cause: incorrect relative-path calculation.
+- Preventive control: fresh-process inventory asserts exact match count and resolved entry path.
+
+- Correction: first without-Skill baseline was contaminated by a readable root `SKILL.md` even though inventory disabled it.
+- Evidence: model cited project hard rules after mechanical inventory showed zero match.
+- Root cause: evaluation isolation failure.
+- Preventive control: controlled A/B uses two new directories whose only designed difference is the repository Skill symlink.
+
+- Correction: project `STATUS.md` used unsupported `health: yellow`.
+- Evidence: `validate_status.py` rejected it.
+- Root cause: schema vocabulary drift.
+- Preventive control: run the canonical validator before integration and use `amber`.
+
+- Correction: the first machine-verified candidate could lose the deadline guard, leave a descendant alive after a leader exit, or skip final reports on a Worker exception.
+- Evidence: bounded fault-injection probes reproduced the guard race and missing-finalization path before repair.
+- Root cause: the parent treated the guard as a fire-and-forget helper and the run loop did not own exception finalization.
+- Preventive control: supervise both processes, require observed stop confirmation, finalize all ordinary exceptions, and keep deterministic regressions in the release gate.
+
+- Correction: a syntactically non-empty raw event tail could be promoted as a successful artifact when no final Worker message existed.
+- Evidence: Claude Opus 5 static review cited `_extract_final_message`; Root confirmed the success predicate accepted its fallback and added a failing regression before repair.
+- Root cause: diagnostic fallback text and user-facing deliverables shared one return channel.
+- Preventive control: require a completed `agent_message`, isolate failed final messages under `workers/`, and promote to `artifacts/` only after the entire success predicate passes.
+
+---
+
+# Pre-publication audit · 2026-08-24
+
+Steven commissioned an independent pre-publication audit before any push. It ran against this working tree with Claude Opus 5, read-only first, then executed the repairs it recommended. This section supersedes the counts and gate states recorded above it.
+
+## Result
+
+Four defects were reproduced, two of them against this repository's own files. All four are repaired. Each repair ships with a regression test that was confirmed to **fail** against the previous behaviour before being accepted; positive-side tests were added alongside them so the repairs cannot over-correct. One real pilot then ran end to end.
+
+## Defects found and repaired
+
+| ID | Defect | Reproduction | Repair |
+|---|---|---|---|
+| A1 | Billing detection read the Worker's own deliverable. Any artifact containing "billing", "rate limit", "usage limit", "credit balance", or "auto top-up" was judged a billing failure: the artifact was discarded and the run aborted as `billing_or_auth_error`. | This repository's `README.md`, `SECURITY.md`, `SKILL.md`, and `references/risk-policy.md` each triggered it when fed in as Worker output. | Detection reads stderr and error events only. `_diagnostic_scan` separates diagnostics from the deliverable. |
+| A2 | The Worker `Popen` set no `stdin`, so Codex inherited the parent's. Under `nohup`, cron, or a pipe -- the product's central overnight scenario -- Codex blocks reading stdin and never starts work. | Controlled A/B on one command, changing only stdin: `DEVNULL` exited in 11.0s having emitted 5 events; an open pipe that never closes had produced **zero** events and had not exited at the 90s bound. (An earlier note cited the `Reading additional input from stdin...` stderr line as the reproduction. That line appears under `DEVNULL` too, so it is not evidence of a hang; the A/B above is.) | `stdin=subprocess.DEVNULL` on both the Worker and the guard. |
+| A3 | Source-mutation detection walked the entire source root unfiltered, keyed on mtime and size, and reported a bare boolean. Any background write -- a sync client, `.DS_Store`, `.git` bookkeeping -- aborted the run as `source_mutation_detected` with no evidence the user could triage. | Writing `.DS_Store` into a source root between snapshots produced a mutation verdict. | The snapshot reuses the indexer's allowlist, and `source_changed_paths` names every path that moved, in the task result and the Morning Report. |
+| A4 | `git status --short` refreshes the on-disk index, changing `.git/index` mtime inside a source root. The documented claim "Planner never modifies source roots" held for bytes but not for filesystem metadata. | Measured directly: `plain: index mtime 1787583805.215547552 -> 1787583806.355329429`; with `--no-optional-locks`, unchanged. | `git --no-optional-locks -C <root> status --short`. |
+
+## Hardening applied alongside
+
+- Worker environment filtering. `--ignore-user-config` covers only `$CODEX_HOME/config.toml`; an environment variable could still supply a key or redirect the endpoint, defeating the `allow_provider_fallback = false` assertion. Credential and endpoint variables are now withheld and recorded in `workers/<task>/DROPPED_ENV.txt`. Proxy variables are kept by design.
+- Run directories are created `0700`, and the example config no longer points `output_root` at `/tmp`. Run directories hold redacted excerpts of the user's own notes; `/tmp` is world-readable and is cleared by the OS.
+- Codex `item.completed` events of type `error` are captured into `worker_errors` and the Morning Report. They arrive on zero-exit runs and were previously discarded.
+- Documented exit-code contract in the README: a deadline stop is a correct outcome that still returns `1`.
+- Continuous integration on `ubuntu-latest` and `macos-latest` across Python 3.11, 3.12, and 3.13: compile, full suite, a real plan-only end-to-end, the execution double gate, and a source-root checksum assertion.
+- Drift tests assert the shipped JSON Schemas still describe what the code emits. They immediately caught the two new result fields missing from the schemas.
+
+## Findings recorded without change
+
+- `task_policy.minimum_score` is inert at its default. Enumerating all 48 planner input combinations gives scores of 30–43; the default threshold of 12 rejects 0 of 48, and `maximum_risk = 2` rejects 0 of 48 because risk is only ever 0 or 1. The only filter that fires by default is `maximum_human_dependency = 1`, which removes all 16 combinations carrying a `decision` signal. Scoring therefore ranks; it does not gate.
+- `claude_sessions` is accepted as a source type but has no adapter distinct from `markdown`. Transcript lines matching a signal are excerpted into `CANDIDATES.jsonl`, which sits uneasily beside the guidance in `source-adapters.md`.
+- The Codex skill inventory truncates descriptions to fit its context budget when many skills are installed; on the audit host only the first ~64 characters survived. The description is now front-loaded so its opening clause stands alone.
+- `schemas/*.json` carry an `$id` under `https://github.com/OWNER/...`. `OWNER` is a placeholder to be replaced at publication.
+
+## Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Python syntax | PASS | `python3 -m py_compile scripts/bbr.py src/burn_before_reset/*.py`. |
+| Unit/integration suite | PASS | 47 tests, Python 3.14.7. |
+| Regression tests fail against old behaviour | PASS | Behaviour reverted in a scratch copy: 7 of the 10 new boundary tests failed, matching exactly the four repairs plus the three hardening items. The remaining 3 are positive-side tests that must pass in both states. |
+| Schema drift | PASS | Planner `TaskSpec` field set equals the schema's declared properties; run state and task result emit no undeclared fields. |
+| Skill structure | PASS | `quick_validate.py` returned `Skill is valid!`; description 527 of 1024 characters. |
+| Fresh-process discovery | PASS | A new `codex debug prompt-input` from the repository advertised exactly one entry, resolved through `.agents/skills/burn-before-reset/SKILL.md`, with zero-byte startup stderr. |
+| CI workflow | PASS locally | The `Plan-only end-to-end` step was extracted from the workflow and executed against a copy of the repository: exit 0, including the exit-2 gate assertion and the source checksum assertion. |
+
+## First real pilot
+
+Run `run-20260824-232739-28d11d67`, source roots limited to three of this project's own Markdown documents, `mode = "safe"`, `max_tasks = 1`, Codex CLI 0.149.1.
+
+- `stop_reason`: `queue_exhausted`; CLI exit `0`; `validate-run` clean.
+- One artifact promoted. `completed` 1, `failed` 0.
+- Source roots byte-identical: all three SHA-256 digests matched their pre-run values, and `source_changed_paths` was empty.
+- Guard ready, guard exit `0`, stop confirmed, no descendant cleanup, no timeout.
+- Run directory permissions `0700`.
+- `DROPPED_ENV.txt` recorded five withheld variables, including `ANTHROPIC_BASE_URL` and three `*_API_KEY` entries present in the launching shell.
+- `worker_errors` captured one real Codex error event on an otherwise successful zero-exit run, and it appears in the Morning Report.
+- **A1 confirmed in the wild.** The promoted artifact contains both "billing" and "auto top-up". Under the previous behaviour this correct, useful deliverable would have been discarded and the run aborted as a billing failure -- on the very first real run.
+
+## Gate ledger after this audit
+
+| Gate | Status | Basis |
+|---|---|---|
+| `HISTORICAL_REPLAY` | PASS | 47 deterministic tests. |
+| `FORWARD_TEST` | PASS | Independent new-process controlled A/B, unchanged from the earlier section. |
+| `READ_ONLY_DEFAULT` | PASS | Config default off; planner no longer touches the Git index; pilot left source bytes identical. |
+| `FRESH_PROCESS_VERIFIED` | PASS | One inventory match, correct resolved path, empty startup stderr. |
+| `NO_FALSE_SUCCESS` | PASS | Empty queue, worker error, timeout, and billing paths all have explicit stop states; error events are surfaced rather than dropped. |
+| `SSOT_BOUNDARY` | PASS | Unchanged. |
+| `STATUS_DISCIPLINE` | PASS | `candidate`, `machine-verified`, `verified`, `released`, and `portable` remain distinct claims. |
+| `INDEPENDENT_TERMINAL_REVIEW` | DEGRADED | Claude Opus 5 completed both the earlier static audit and this pre-publication audit. Kimi 3 never returned. Independent coverage is one reviewer, not two. |
+| `PROMOTION_GATE` | 3/3 | Three real successful tasks across two source types, 2026-08-24/25. See the bounded coverage test below. |
+| `CONTINUOUS_INTEGRATION` | PASS locally | Workflow added and its end-to-end step executed locally; it has not yet run on GitHub. |
+
+## Remaining risks
+
+1. Standard Codex sandbox modes still do not establish a project-specific read allowlist. Do not point the execution pilot at sensitive home-directory roots.
+2. Credits balance and Auto top-up remain user assertions. The local watchdog cannot guarantee server-side billing behaviour or cancel work already submitted.
+3. The watchdog is validated locally, including stubborn descendants and guard death, but still not across a real quota-reset event, system sleep/wake, or every supported Linux distribution.
+4. One real task has run, not three. Fake-worker integration and read-only behavioural evals are not promotion evidence.
+5. Kimi 3 did not return a post-fix review, so independent terminal coverage is Claude Opus 5 plus Root verification, not two completed reviewers.
+6. Billing detection now ignores the Worker's prose. A Worker that reports a quota failure only in its final message, with a zero exit status and no error event, would not trip this specific check. The other gates still apply. See `SECURITY.md`.
+7. The CI workflow has never executed on GitHub. Its first real signal arrives with the first push.
+
+---
+
+# Bounded coverage test · 2026-08-25
+
+Steven asked whether the remaining promotion evidence could come from one bounded test rather than repeating the pilot. It could, and it should have from the start: `PROMOTION_GATE` counts runs, and a count does not measure coverage. Three repetitions of one run shape carry one run shape's worth of evidence.
+
+So the remaining runs were designed against what pilot 1 had **not** exercised, rather than against the number 3.
+
+## What pilot 1 left unproven
+
+| Path | Why it mattered |
+|---|---|
+| `git` source type end to end | This is the exact code changed by repair A4. It had a unit test and no real run. |
+| Multi-task loop (`max_tasks > 1`) | Per-task state writes, checkpoint accumulation, and the loop's stop conditions had only ever run once through. |
+| The deadline guard actually killing a live Codex process group | **The product's central claim.** It had only ever fired against fake processes in unit tests. Pilot 1 had six hours of headroom, so the guard idled and exited 0 without stopping anything. |
+
+## Test 1 · git source, two tasks
+
+Run `run-20260824-235446-b5b28932`. Source root a dirty Git repository: one modified tracked file, one untracked file, two Markdown documents carrying `TODO`, `blocked`, and next-step signals.
+
+- Frozen queue: 2 tasks, scores 38 and 35, both `risk = 1` via the Git adapter.
+- `stop_reason` `queue_exhausted`, CLI exit `0`, `validate-run` clean.
+- Both tasks succeeded; two artifacts promoted; `failed` empty.
+- Checkpoints recorded four ordered entries across the two tasks.
+- **`.git/index` mtime identical before and after the whole run** (`1787586886.605537519` both times), confirming repair A4 end to end rather than only in a unit test.
+- All three source digests unchanged; `source_changed_paths` empty.
+
+Cumulative real successful tasks: 1 + 2 = **3**, across two source types.
+
+## Test 2 · the guard against a live Codex process
+
+Not a bbr run. A direct test of the one path a bbr run cannot reach quickly, because execution is mechanically plan-only inside sixty minutes of the hard stop.
+
+A real `codex exec` was launched into its own session with a long generation prompt, then `bbr guard` was pointed at it with a deadline twenty seconds out.
+
+- Codex confirmed **alive** at T+8s, so the kill had something real to act on.
+- Guard exited `0` at 21.7s.
+- `STOP_NOW` written: `deadline reached at 2026-08-24T23:57:01+08:00`.
+- `STOP_REASON` written: `deadline_guard:sigint` — stopped at the first escalation step, no SIGTERM or SIGKILL needed, and not `sigkill-unconfirmed`.
+- Process group independently verified gone: `ps -eo pid=,pgid=` showed no surviving member, and no `codex exec` process remained anywhere on the host.
+
+One incidental finding: the verifying script's own `os.killpg(pgid, 0)` raised `PermissionError` after the group died, because the pgid had been recycled. `process_group_alive` already handles exactly this by falling back to a `ps` scan, and returned `False` correctly. The library was right and the naive check was wrong.
+
+## Repairs from this round
+
+- Checkpoint timestamps mixed timezones. `started` was written in the deadline's timezone and `completed` in the local one, so adjacent lines of `CHECKPOINTS.md` spelled the same instant as `15:54` and `23:55` — a receipt that reads as an eight-hour task. Both now use the local offset.
+- Claude Code could not discover the Skill. It reads `.claude/skills/` in the working directory and its parents, not `.agents/skills/`. Verified by probe: a Claude Code session started in this repository answered `NO` before the change and `YES` after. A second symlink was added, and a test now asserts both paths resolve to the canonical `SKILL.md`, because this class of breakage is silent.
+
+## Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Unit/integration suite | PASS | 49 tests. |
+| Regression tests fail against old behaviour | PASS | Timezone and dual-discovery behaviour reverted in a scratch copy: both new tests failed, the other 13 passed. |
+| Dual discovery | PASS | Codex resolves `r8/burn-before-reset/SKILL.md`; a fresh Claude Code process answers `YES`. |
+
+## Gate ledger
+
+| Gate | Status | Basis |
+|---|---|---|
+| `PROMOTION_GATE` | 3/3 | Three real successful tasks, two source types. |
+| `DEADLINE_GUARD_LIVE` | PASS | `deadline_guard:sigint` against a live Codex process group, independently confirmed dead. |
+| `INDEPENDENT_TERMINAL_REVIEW` | DEGRADED | Unchanged: one completed reviewer, not two. |
+
+## Still unproven
+
+1. `balanced` mode. Every real run so far used `mode = "safe"` and the `read-only` sandbox. The `workspace-write` staging path has never run against real Codex.
+2. The guard firing **inside a real bbr run**. Test 2 exercised the guard directly. A run whose worker is still going when the hard stop arrives requires a task that outlives the sixty-minute execution gate, so it has not been staged.
+3. Escalation beyond SIGINT. The live process stopped at the first signal, so SIGTERM and SIGKILL against real Codex remain unit-tested only.
+4. Sources at real scale. All runs used a handful of small files. Indexing a full vault or a large repository is untested for both duration and candidate quality.

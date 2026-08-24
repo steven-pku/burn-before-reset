@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/OWNER/burn-before-reset/schemas/task-result.schema.json",
+  "title": "Burn Before Reset Task Result",
+  "type": "object",
+  "required": [
+    "task_id",
+    "success",
+    "return_code",
+    "timed_out",
+    "source_changed",
+    "source_changed_paths",
+    "worker_errors",
+    "billing_error",
+    "quota_exhausted",
+    "deadline_stop",
+    "guard_ready",
+    "guard_failed",
+    "guard_exit_code",
+    "stop_confirmed",
+    "stop_result",
+    "descendant_cleanup_required",
+    "source_check_completed",
+    "error_type",
+    "error_message",
+    "artifact",
+    "started_at",
+    "finished_at"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "return_code": {
+      "type": "integer"
+    },
+    "timed_out": {
+      "type": "boolean"
+    },
+    "source_changed": {
+      "type": "boolean"
+    },
+    "source_changed_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Allowlisted paths whose size or mtime moved during the run. Evidence for source_changed; a background sync client leaves the same trace as the Worker."
+    },
+    "worker_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Error messages the Worker itself reported. Present even on a zero-exit run."
+    },
+    "billing_error": {
+      "type": "boolean"
+    },
+    "quota_exhausted": {
+      "type": "boolean",
+      "description": "The subscription allowance ran out. An ordinary end of a window, not a billing fault."
+    },
+    "deadline_stop": {
+      "type": "boolean"
+    },
+    "guard_ready": {
+      "type": "boolean"
+    },
+    "guard_failed": {
+      "type": "boolean"
+    },
+    "guard_exit_code": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "stop_confirmed": {
+      "type": "boolean"
+    },
+    "stop_result": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "descendant_cleanup_required": {
+      "type": "boolean"
+    },
+    "source_check_completed": {
+      "type": "boolean"
+    },
+    "error_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "artifact": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "finished_at": {
+      "type": "string"
+    }
+  }
+}

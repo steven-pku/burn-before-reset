@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/OWNER/burn-before-reset/schemas/task-spec.schema.json",
+  "title": "Burn Before Reset TaskSpec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "objective",
+    "source_refs",
+    "deliverables",
+    "allowed_read_roots",
+    "allowed_write_root",
+    "validation",
+    "recency",
+    "risk",
+    "human_dependency",
+    "score",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^task-[a-f0-9]{12}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object"
+      }
+    },
+    "deliverables": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowed_read_roots": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowed_write_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "validation": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "strategic_value": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "reuse": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "readiness": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "verifiability": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "recency": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "description": "How recently the cited source changed. Age is the strongest available signal for what is worth resuming tonight."
+    },
+    "checkpointability": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "token_fitness": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "risk": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "human_dependency": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "estimated_class": {
+      "enum": [
+        "small",
+        "medium",
+        "large"
+      ]
+    },
+    "checkpoint_interval_minutes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "score": {
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "skipped"
+      ]
+    }
+  }
+}
