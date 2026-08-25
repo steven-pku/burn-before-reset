@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -108,6 +109,11 @@ def main(argv: list[str] | None = None) -> int:
             deadline = datetime.fromisoformat(args.deadline.replace("Z", "+00:00"))
             if deadline.tzinfo is None:
                 raise ConfigError("guard deadline must include timezone")
+            # argparse float accepts "inf" and "nan"; a non-finite grace makes the
+            # SIGINT→SIGTERM→SIGKILL ladder lose its bounded-stop guarantee.
+            for label, value in (("--sigint-grace", args.sigint_grace), ("--sigterm-grace", args.sigterm_grace)):
+                if not math.isfinite(value) or value < 0:
+                    raise ConfigError(f"guard {label} must be a finite non-negative number")
             return guard_process(
                 args.pid,
                 deadline,

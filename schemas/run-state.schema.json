@@ -22,6 +22,7 @@
     "billing_error_detected",
     "quota_exhausted",
     "quota_wait_cycles",
+    "worker_calls",
     "rounds",
     "guard_failure_detected",
     "stop_unconfirmed_detected",
@@ -108,6 +109,11 @@
       "type": "integer",
       "minimum": 0,
       "description": "Times the supervisor slept waiting for the inner allowance to replenish."
+    },
+    "worker_calls": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Worker launches this run has made: first attempts, quota retries, and re-planned rounds all count against execution.max_worker_calls_per_run."
     },
     "rounds": {
       "type": "array",

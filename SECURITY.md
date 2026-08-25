@@ -5,7 +5,7 @@ Burn Before Reset is a local automation prototype, not a billing-control product
 ## Supported boundary
 
 - Local CLI workers only: Codex CLI, or Claude Code in `safe` mode.
-- The Claude worker's read-only guarantee is tool absence, not denial: it is launched with `--safe-mode`, an empty strict MCP map, and only Read/Grep/Glob. Without `--safe-mode` a probe reached a connected cloud-storage write tool, so that flag is load-bearing.
+- The Claude worker's read-only guarantee is tool absence, not denial: it is launched with `--safe-mode`, an empty strict MCP map, and only Read/Grep/Glob. Without `--safe-mode` a probe reached a connected cloud-storage write tool, so that flag is load-bearing. `--safe-mode` is not listed in the published CLI reference, so it is treated as an observed capability rather than a stable contract: preflight parses `claude --help` and refuses the run if it — or any other flag the worker command depends on — is not advertised. Dropping the flag and relying on `--tools` alone is not a fallback; that reopens the MCP write-tool exposure.
 - The Claude worker's READ scope is its working directory plus the granted source roots — Read/Grep are unprompted in the cwd and `--add-dir` only ever widens it. The worker is therefore pinned to the empty staging directory as cwd; it is not confined to the allowlist the deterministic indexer uses, and a tool it attempts without a grant fails the task (`PermissionDenied`) rather than merely being logged.
 - The deadline guard is per-task. Between tasks, during replenishment waits, and during re-planning, the outer hard stop is enforced by the supervisor's own checks (bounded sleeps, per-task dispatch checks), not by an independent watchdog process. A wait or re-index cannot launch work past the hard stop, but the supervisor process itself may outlive it briefly.
 - For the Codex worker in `balanced` mode, "no external actions" rests on the Codex sandbox plus the Worker prompt; this repository adds no mechanical network/push gate of its own beyond the sandbox flag it passes. Treat that claim as sandbox-strength, not proof.
@@ -20,6 +20,7 @@ Burn Before Reset is a local automation prototype, not a billing-control product
 - Frozen task IDs and deliverables are path-validated even when a queue hash is recomputed; runtime read/write roots must match the current configuration and run.
 - Raw or failed Worker output is never promoted into the official artifact directory.
 - The watchdog controls local processes only. It cannot cancel cloud tasks or reverse server-side usage.
+- The tool holds no spend authority. It observes local time, exit codes, and provider refusal text — never the server-side quota pool, credit balance, or replenishment schedule — so it can only stop on the clock the user asserted (`reset_at`), on provider refusals, and on `execution.max_worker_calls_per_run`, an absolute per-run cap on worker launches (first attempts, quota retries, and re-planned rounds all count). It cannot promise that only expiring quota is burned; keeping auto top-up and paid credits disabled at the account is the user's half of that boundary.
 
 ## Two detection boundaries worth knowing
 

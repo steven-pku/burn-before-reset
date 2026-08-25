@@ -318,6 +318,7 @@ def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
         "billing_error_detected": False,
         "quota_exhausted": False,
         "quota_wait_cycles": 0,
+        "worker_calls": 0,
         "rounds": [{"queue": "QUEUE.json", "tasks_sha256": queue["tasks_sha256"]}],
         "guard_failure_detected": False,
         "stop_unconfirmed_detected": False,

@@ -29,6 +29,10 @@ allow_provider_fallback = false
 enabled = false
 codex_binary = "codex"
 max_tasks = 3
+# Absolute per-run cap on worker launches: first attempts, quota retries, and
+# re-planned rounds all count. A runaway backstop — the tool cannot see the
+# provider's quota pool, so this is the one spend bound it can enforce itself.
+max_worker_calls_per_run = 500
 task_timeout_seconds = 900
 sigint_grace_seconds = 20
 sigterm_grace_seconds = 10

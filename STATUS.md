@@ -2,7 +2,7 @@
 project_state: active
 stage: v0.2-bounded-autonomy
 health: amber
-updated_at: 2026-08-26T03:20:00+08:00
+updated_at: 2026-08-26T13:30:00+08:00
 next_action_owner: Steven
 next_action: Full-premise autopilot run the night before the weekly reset; iterate on artifact quality from there.
 blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Kimi 3 terminal review was inconclusive because the local CLI produced file-watcher errors and no model output.", "CI is live on GitHub: the first run failed on tests that assumed codex/claude were installed; hermetic fixes landed and the suite must stay green there.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do.", "`balanced` mode has never run against real Codex."]
@@ -42,6 +42,7 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 - **README publication pass (2026-08-26)**: audited against the vault README spec. Added static license/python badges and a contents line, inserted the missing edit-config step into Quick start (the full `cp` → `validate-config` → `plan` pipeline was re-run locally against scratch sources, final exit `0`), removed a stale "v0.1" adapter version claim, linked LICENSE. English-only confirmed as the deliberate language choice. Launch assets produced 2026-08-26: `assets/social-preview.png` (1280×640, programmatic render) and `assets/demo.gif` (vhs 0.11.0, regenerable from `assets/demo.tape` against throwaway sources under `/Users/Shared/bbr-demo`; final frame verified). The demo GIF is wired into the README hero. Social preview upload to repo settings is deferred to publication day: GitHub only offers the upload on public repos (or private repos that already had an image) — the settings section is absent on this fresh private repo, confirmed against the official docs.
 - **About + Chinese page (2026-08-26)**: repo description and 8 topics set via API (the About sidebar was empty since the bare push). `README.zh-CN.md` added as a Chinese explainer page — deliberately not a line-by-line translation; the English README stays authoritative — with language-switcher lines in both files.
 - **CHANGELOG added (2026-08-26)**: Keep-a-Changelog format, entries grounded in git history and the status ledger — 0.1.0 (initial candidate), 0.2.0 (bounded autonomy, tag `a2a0edf`), Unreleased (external-audit hardening, README pass, rename follow-ups). v0.1.0 has no tag; the initial import commit is the anchor.
+- **Third external audit repaired (2026-08-26, GPT-5.6 Pro, 4 🔴)**: non-finite durations (`inf`/`nan`) now fail configuration closed through one finite-number validator (reproduced before fixing); `validate-run` gained semantic terminal-state invariants alongside hash integrity (stop-reason vocabulary/compatibility, list/status/result agreement, `finished_at`, timestamp monotonicity); `--safe-mode` is no longer assumed stable — preflight probes `claude --help` for every load-bearing flag and fails closed (the seat's "drop the flag, rely on --tools" alternative rejected: it reopens the MCP write-tool hole); spend authority honestly bounded with `execution.max_worker_calls_per_run` (stop reason `worker_call_cap`) plus README/SECURITY positioning, with the independent latest-stop ceiling and second-source balance confirmation recorded as v0.3 backlog. 82 tests; 16 of 22 new cases confirmed red against pre-fix src in a scratch copy. Full disposition in `VALIDATION.md`.
 
 ## Blockers and risks
 
@@ -53,8 +54,8 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 ## Verification
 
 - `python3 -m py_compile scripts/bbr.py src/burn_before_reset/*.py`: PASS.
-- `PYTHONPATH=src python3 -m unittest discover`: PASS, 69 tests, Python 3.14.7.
-- Regression tests confirmed to fail against the pre-repair behaviour: 7 of 10 failed in the first reverted scratch copy, and both tests from the second round failed in a second one. Positive-side tests pass in both states by design.
+- `PYTHONPATH=src python3 -m unittest discover`: PASS, 82 tests, Python 3.14.7 — green both normally and under a masked PATH with `codex`/`claude` absent.
+- Regression tests confirmed to fail against the pre-repair behaviour: 7 of 10 failed in the first reverted scratch copy, both tests from the second round failed in a second one, and 16 of 22 third-audit cases failed in a third (the 6 green ones are inputs the old code already rejected). Positive-side tests pass in both states by design.
 - Schema drift tests: PASS; planner output matches the shipped contracts, and no undeclared fields are emitted.
 - `quick_validate.py <repo>`: PASS, Skill valid; description 527 of 1024 characters.
 - Fresh `codex debug prompt-input`: PASS; exactly one `burn-before-reset` entry resolved through `.agents/skills/`, zero-byte startup stderr.

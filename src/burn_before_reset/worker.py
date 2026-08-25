@@ -304,7 +304,10 @@ def _worker_command(config: AppConfig, prompt: str, staging: Path, source_roots:
             # MCP servers in one move. Without it a worker can still see connected MCP
             # tools: a probe with only the built-in tools restricted still reached for a
             # cloud-storage create_file. --strict-mcp-config with an empty server map is
-            # the second lock on the same door.
+            # the second lock on the same door. The flag is not in the documented CLI
+            # reference, so preflight probes `claude --help` for it and every other
+            # load-bearing flag and fails closed if any is missing
+            # (config.assert_claude_cli_contract).
             "--safe-mode",
             "--strict-mcp-config",
             "--mcp-config",

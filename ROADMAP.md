@@ -32,3 +32,8 @@ Exit gate: three real tasks pass, lifecycle can become `verified`, and Steven ap
 - Package as a plugin only if broad installation or connectors justify it.
 - Claude Code adapter: landed early, in v0.1 (2026-08-25), `safe` mode only, after its own negative tests. Remaining here: UI, notifications, community task packs after separate safety review.
 - Global installation and any `verified` claim stay gated on 3/3 real successful runs.
+- Spend-authority hardening (third external audit, 2026-08-26): an absolute
+  latest-stop ceiling independent of `reset_at`, and a second-source balance/cycle
+  confirmation near the boundary that stops early when no authoritative answer is
+  available. v0.2 ships the honest minimum instead: `max_worker_calls_per_run`
+  plus the documented "stops on the user's clock" positioning.

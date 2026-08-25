@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 import os
+import subprocess
 import tomllib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -12,6 +14,22 @@ from .paths import ExecutableError, resolve_executable
 
 class ConfigError(ValueError):
     """Raised when a run configuration fails closed."""
+
+
+# Flags the Claude worker command depends on for its read-only guarantee.
+# `--safe-mode` is load-bearing (without it a probe reached a connected
+# cloud-storage write tool) but absent from the documented CLI reference, so it
+# cannot be treated as a stable contract: the preflight probes `claude --help`
+# and refuses to run against a CLI that does not advertise every one of these.
+# Dropping `--safe-mode` and relying on `--tools` alone is not an acceptable
+# fallback — that reopens the MCP write-tool hole the flag exists to close.
+CLAUDE_LOAD_BEARING_FLAGS = (
+    "--safe-mode",
+    "--strict-mcp-config",
+    "--permission-mode",
+    "--tools",
+    "--add-dir",
+)
 
 
 @dataclass(frozen=True)
@@ -44,6 +62,7 @@ class ExecutionSettings:
     codex_binary: str
     claude_binary: str
     max_tasks: int
+    max_worker_calls_per_run: int
     task_timeout_seconds: int
     sigint_grace_seconds: float
     sigterm_grace_seconds: float
@@ -86,6 +105,25 @@ def _require_bool(table: dict[str, Any], key: str) -> bool:
     value = table.get(key)
     if not isinstance(value, bool):
         raise ConfigError(f"{key} must be true or false")
+    return value
+
+
+def _finite_number(raw: Any, field: str, *, minimum: float, maximum: float) -> float:
+    """Every duration, timeout, grace period, and probe interval passes here.
+
+    TOML happily expresses `inf` and `nan`; neither is negative, so a plain
+    sign check lets them through into deadline arithmetic, where `inf` makes an
+    escalation wait never expire and `nan` makes every comparison false. The
+    core safety property is a *bounded* stop after the hard deadline — a
+    non-finite bound is no bound at all, so these fail closed at load.
+    """
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise ConfigError(f"{field} must be a finite number")
+    value = float(raw)
+    if not math.isfinite(value):
+        raise ConfigError(f"{field} must be a finite number")
+    if not minimum <= value <= maximum:
+        raise ConfigError(f"{field} must be between {minimum:g} and {maximum:g}")
     return value
 
 
@@ -145,12 +183,12 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
     wait_for_replenish = run_data.get("wait_for_replenish", True)
     if not isinstance(wait_for_replenish, bool):
         raise ConfigError("run.wait_for_replenish must be true or false")
-    try:
-        probe_minutes = float(run_data.get("quota_replenish_probe_minutes", 20))
-    except (TypeError, ValueError) as exc:
-        raise ConfigError("run.quota_replenish_probe_minutes must be a number") from exc
-    if not 0.005 <= probe_minutes <= 180:
-        raise ConfigError("run.quota_replenish_probe_minutes must be between 0.005 and 180")
+    probe_minutes = _finite_number(
+        run_data.get("quota_replenish_probe_minutes", 20),
+        "run.quota_replenish_probe_minutes",
+        minimum=0.005,
+        maximum=180,
+    )
     replan_when_queue_empty = run_data.get("replan_when_queue_empty", True)
     if not isinstance(replan_when_queue_empty, bool):
         raise ConfigError("run.replan_when_queue_empty must be true or false")
@@ -193,21 +231,49 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
         provider=provider,
         codex_binary=str(execution_data.get("codex_binary", "codex")),
         claude_binary=str(execution_data.get("claude_binary", "claude")),
-        max_tasks=int(execution_data.get("max_tasks", 3)),
-        task_timeout_seconds=int(execution_data.get("task_timeout_seconds", 900)),
-        sigint_grace_seconds=float(execution_data.get("sigint_grace_seconds", 20)),
-        sigterm_grace_seconds=float(execution_data.get("sigterm_grace_seconds", 10)),
+        max_tasks=int(
+            _finite_number(
+                execution_data.get("max_tasks", 3),
+                "execution.max_tasks",
+                minimum=1,
+                maximum=200,
+            )
+        ),
+        max_worker_calls_per_run=int(
+            _finite_number(
+                execution_data.get("max_worker_calls_per_run", 500),
+                "execution.max_worker_calls_per_run",
+                minimum=1,
+                maximum=2000,
+            )
+        ),
+        task_timeout_seconds=int(
+            _finite_number(
+                execution_data.get("task_timeout_seconds", 900),
+                "execution.task_timeout_seconds",
+                minimum=10,
+                maximum=86400,
+            )
+        ),
+        sigint_grace_seconds=_finite_number(
+            execution_data.get("sigint_grace_seconds", 20),
+            "execution.sigint_grace_seconds",
+            minimum=0,
+            maximum=600,
+        ),
+        sigterm_grace_seconds=_finite_number(
+            execution_data.get("sigterm_grace_seconds", 10),
+            "execution.sigterm_grace_seconds",
+            minimum=0,
+            maximum=600,
+        ),
     )
     # The real bounds on a run are the hard stop, the drain window, and the per-task
     # timeout. A cap of 10 made the tool unable to fill the window it exists to fill:
     # ten tasks of a few minutes each leave a nine-hour window almost entirely idle.
-    # This stays only as a runaway backstop.
-    if execution.max_tasks < 1 or execution.max_tasks > 200:
-        raise ConfigError("execution.max_tasks must be between 1 and 200")
-    if execution.task_timeout_seconds < 10:
-        raise ConfigError("execution.task_timeout_seconds must be at least 10")
-    if execution.sigint_grace_seconds < 0 or execution.sigterm_grace_seconds < 0:
-        raise ConfigError("signal grace periods must be non-negative")
+    # These stay only as runaway backstops: max_tasks bounds one queue,
+    # max_worker_calls_per_run bounds every worker launch a run may ever make —
+    # quota retries and re-planned rounds included.
     drain_budget_seconds = (drain - safety) * 60
     if execution.task_timeout_seconds > drain_budget_seconds:
         raise ConfigError("execution.task_timeout_seconds exceeds the drain-to-hard-stop budget")
@@ -300,8 +366,41 @@ def assert_execution_environment(
         if config.execution.provider == "claude"
         else config.execution.codex_binary
     )
+    resolved_worker = ""
     for binary in (worker_binary, "git", "ps"):
         try:
-            resolve_executable(binary)
+            resolved = resolve_executable(binary)
         except ExecutableError as exc:
             raise ConfigError(str(exc)) from exc
+        if binary == worker_binary:
+            resolved_worker = resolved
+    if config.execution.provider == "claude":
+        assert_claude_cli_contract(resolved_worker)
+
+
+def assert_claude_cli_contract(binary: str) -> None:
+    """Probe `claude --help` for every flag the read-only worker command needs.
+
+    An installed CLI that silently dropped `--safe-mode` would otherwise be
+    discovered only when the worker exits mid-window — or worse, tolerated a
+    renamed flag and launched with MCP write tools visible. The probe runs once
+    at preflight and fails closed on any missing flag.
+    """
+    try:
+        probe = subprocess.run(
+            [binary, "--help"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ConfigError(f"cannot probe {binary} --help: {exc}") from exc
+    advertised = probe.stdout + probe.stderr
+    missing = [flag for flag in CLAUDE_LOAD_BEARING_FLAGS if flag not in advertised]
+    if missing:
+        raise ConfigError(
+            f"{binary} --help does not advertise {', '.join(missing)}; "
+            "the Claude worker's read-only guarantee depends on these flags, "
+            "so the run is refused rather than launched without them"
+        )

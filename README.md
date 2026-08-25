@@ -101,6 +101,7 @@ A `1` from a deadline stop means "ran out of time as designed", so treat it as a
 
 - Read quota/reset data from undocumented endpoints.
 - Guarantee server-side billing behavior.
+- Observe the server-side quota pool, credit balance, or replenishment schedule. It stops on the clock you give it (`reset_at`), on provider refusals, and on the `max_worker_calls_per_run` backstop — it cannot promise that only expiring quota is burned.
 - Use API keys, paid Credits, provider fallback, or cloud jobs.
 - Mutate original Vaults or repositories.
 - Integrate patches, open PRs, create remotes, or push.
@@ -137,7 +138,9 @@ frontmatter — and both Codex CLI and Claude Code discover it from this checkou
 `codex exec` under its sandbox (`safe` or `balanced`). `execution.provider = "claude"`
 shells out to Claude Code headless, `safe` mode only: the worker is launched with
 `--safe-mode`, an empty strict MCP configuration, and nothing beyond Read/Grep/Glob —
-read-only because the write tools are absent, not merely denied. Running out of
+read-only because the write tools are absent, not merely denied. `--safe-mode` is not
+in the published CLI reference, so preflight probes `claude --help` for it and every
+other load-bearing flag, and refuses the run if any is missing. Running out of
 allowance mid-run ends the run as `quota_exhausted`, an ordinary stop distinct from
 `billing_or_auth_error`. Other agents can still *discover* the Skill without being able
 to *execute* it — read the boundary before assuming "works with my agent" means "runs

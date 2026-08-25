@@ -415,3 +415,37 @@ Five new regression tests; all confirmed red against the pre-fix behaviour in a 
 ## Seat performance
 
 Both seats added real value. sol was strongest on state-machine escape paths and claim-vs-code accounting; Grok was strongest on the v0.2 seams (handshake lifecycle, signal semantics, read-surface widening) and disciplined about not re-reporting settled v0.1 findings. No fabricated finding from either seat. Keep both.
+
+---
+
+# Third external audit (one seat) · 2026-08-26
+
+Steven commissioned a third seat after the two-seat round: **GPT-5.6 Pro**, contract as before (anchors mandatory, problems only, no edits), run against a `git archive` ZIP of commit `1f08f4b`. HEAD had advanced past that commit (documentation and launch-asset commits only) by the time fixes landed; every anchor was re-verified against the current tree before adoption. The seat explicitly deduplicated against this ledger and re-reported nothing already recorded — that discipline held on inspection. Four 🔴 findings.
+
+## Adopted as reported
+
+1. **Non-finite durations pass validation (🔴 2.1)** — reproduced before fixing: `sigint_grace_seconds = inf` sailed through `load_config`, because `inf` and `nan` are not negative and the only guard was a sign check. `inf` in the escalation chain makes a grace wait never expire; `nan` makes every comparison false. A non-finite bound on the stop ladder is no bound at all. Fix: every duration, timeout, grace period, probe interval — and the count-shaped `max_tasks`, whose bare `int()` cast crashed with an uncaught `OverflowError` on `inf` — now passes one `_finite_number` validator (bool-rejecting, `math.isfinite`, closed range) at load, and the `guard` subcommand re-checks its own argparse floats. Parameterised tests cover `inf`/`-inf`/`nan` for every field.
+2. **`validate-run` verified hashes, not self-consistency (🔴 2.2)** — the seat demonstrated that a ledger whose hashes are recomputed by the same implementation passes validation while describing an impossible run. Validation is now split into integrity (files, hashes, key sets — unchanged) and semantic terminal-state invariants, both always run: stop-reason vocabulary (`KNOWN_STOP_REASONS`), completed/failed/task-status/task-results agreement, completed tasks must carry a successful result record, `queue_exhausted` contradicts a non-empty failed list, stopped runs need a parseable `finished_at` that does not precede `created_at`, per-task finish must not precede its start, and a stop reason on a non-stopped phase is rejected. Nine corruption cases, each leaving every hash valid, are covered by regression tests.
+
+## Adopted with correction
+
+3. **`--safe-mode` treated as a stable contract (🔴 1b)** — the report's framing ("the flag is absent from the official CLI reference, so the worker may exit before any model call") was checked against reality before adoption: the flag **exists** in the installed CLI (`claude --help` lists it) and an earlier negative test proved it is load-bearing — without it the worker saw a connected cloud-storage write tool. So the defect is not a phantom flag; it is depending on an **undocumented** flag with no detection if a future release drops or renames it. Fix: preflight now probes `claude --help` for every load-bearing flag (`CLAUDE_LOAD_BEARING_FLAGS`) and fails closed, naming what is missing; a drift test pins the worker command's option set to the probed list. The report's alternative — drop the parameter and rely on the documented `--tools` — was **explicitly rejected**: that reopens the exact MCP write-tool exposure the flag closes. SECURITY.md now discloses the observed-capability status.
+4. **Open-loop spend authority (🔴 design)** — direction accepted: the tool observes local time, exit codes, and refusal text, never the provider's quota pool, so before a refusal arrives every successful call is presumed safe to burn. Partly already priced (billing gates, hard stop, drain window, per-task timeout, subscription-only assertions). What landed tonight is the honest minimum: `execution.max_worker_calls_per_run` — one absolute per-run cap that every worker launch (first attempts, quota retries, re-planned rounds) counts against, enforced across rounds and surfaced as stop reason `worker_call_cap` — plus plain-language positioning in README and SECURITY that the tool stops on the user's clock and cannot promise only expiring quota is burned. The report's further asks — an absolute latest-stop ceiling independent of `reset_at`, and a second-source balance/cycle confirmation near the boundary — are recorded in `ROADMAP.md` v0.3, deliberately not bolted on under audit pressure.
+
+## Declined
+
+- Nothing declined outright this round. The two deferred spend-authority sub-asks above are backlog with named owners in the roadmap, not silent drops.
+
+## Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Unit/integration suite | PASS | 82 tests, normal environment. |
+| Masked-PATH suite | PASS | Same 82 under a PATH holding only standard tools (git, ps, sh, python3, true, coreutils) with `codex`/`claude` absent. |
+| Regression tests fail against old behaviour | PASS | src reverted to pre-fix HEAD in a scratch copy with the new tests kept: 16 of 22 new cases red (7 failures + 9 errors). The 6 green cases are inputs the old code already rejected — `-inf` grace via the sign check, and all non-finite probe intervals via the existing range check — kept in the matrix for coverage, not as proof. |
+| ruff | PASS | Clean. |
+| Schema drift | PASS | `worker_calls` added to the run-state contract and schema together. |
+
+## Seat performance
+
+Strong on input-domain and ledger-semantics reasoning; both correctness findings were real and one was demonstrated by construction. The `--safe-mode` finding needed the implementation-side correction above — right defect class, wrong factual premise — which is exactly why adopted findings are verified against the tree first. The design-layer finding restated some already-priced boundaries but drove one genuinely missing control. Keep, with the verify-before-adopt step non-negotiable.

@@ -468,6 +468,18 @@ class ClaudeWorkerTests(unittest.TestCase):
                 self.assertNotIn(writer, tools)
             self.assertNotIn("--dangerously-skip-permissions", joined)
             self.assertNotIn("bypassPermissions", joined)
+            # Every load-bearing option in the command must be covered by the
+            # preflight --help probe, or a CLI that dropped one would be caught
+            # only mid-window. Fails when the command grows a flag the probe
+            # does not know about.
+            from burn_before_reset.config import CLAUDE_LOAD_BEARING_FLAGS
+
+            option_flags = {arg for arg in command if arg.startswith("--")}
+            self.assertLessEqual(set(CLAUDE_LOAD_BEARING_FLAGS), option_flags)
+            self.assertLessEqual(
+                option_flags,
+                set(CLAUDE_LOAD_BEARING_FLAGS) | {"--output-format", "--mcp-config"},
+            )
 
     def test_balanced_mode_is_refused_for_the_claude_provider(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

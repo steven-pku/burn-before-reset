@@ -270,6 +270,105 @@ class RunnerTests(unittest.TestCase):
             (run_dir / "MORNING_REPORT.md").write_text("# Report\n", encoding="utf-8")
             self.assertTrue(any("missing completed deliverable" in item for item in validate_run(run_dir)))
 
+    def test_worker_call_cap_stops_the_run_before_the_queue_is_done(self) -> None:
+        # The one spend bound the tool can enforce itself: every worker launch
+        # counts against execution.max_worker_calls_per_run, and reaching it ends
+        # the run as worker_call_cap instead of dispatching another task.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "one.md").write_text("# One\n\nTODO: verify this.\n", encoding="utf-8")
+            (source / "two.md").write_text("# Two\n\nTODO: verify that.\n", encoding="utf-8")
+            fake = self._fake_codex(root / "fake-codex")
+            config_path = write_config(root / "config.toml", source, root / "output", enabled=True, codex_binary=str(fake))
+            text = config_path.read_text(encoding="utf-8").replace(
+                "max_tasks = 3", "max_tasks = 3\nmax_worker_calls_per_run = 1"
+            )
+            config_path.write_text(text, encoding="utf-8")
+            config = load_config(config_path)
+            run_dir = plan_run(config)
+            queue = read_json(run_dir / "QUEUE.json")
+            self.assertEqual(len(queue["tasks"]), 2, "test needs a queue longer than the cap")
+            state = execute_run(config, run_dir, Path(__file__).resolve().parents[1] / "scripts" / "bbr.py")
+            self.assertEqual(state["stop_reason"], "worker_call_cap")
+            self.assertEqual(state["worker_calls"], 1)
+            self.assertEqual(len(state["completed"]), 1)
+            self.assertEqual(state["failed"], [])
+            statuses = sorted(state["task_status"].values())
+            self.assertEqual(statuses, ["completed", "queued"])
+            self.assertEqual(validate_run(run_dir), [])
+
+    def test_validate_run_rejects_contradictory_terminal_states(self) -> None:
+        # The hash chain proves the fields were written together; these invariants
+        # prove they describe a run that could have happened. Every corruption here
+        # leaves all hashes valid and must still fail validation.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# Work\n\nTODO: verify this.\n", encoding="utf-8")
+            fake = self._fake_codex(root / "fake-codex")
+            config = load_config(
+                write_config(root / "config.toml", source, root / "output", enabled=True, codex_binary=str(fake))
+            )
+            run_dir = plan_run(config)
+            state = execute_run(config, run_dir, Path(__file__).resolve().parents[1] / "scripts" / "bbr.py")
+            self.assertEqual(validate_run(run_dir), [], "baseline run must validate clean")
+            pristine = (run_dir / "RUN_STATE.json").read_text(encoding="utf-8")
+            task_id = state["completed"][0]
+
+            def corrupt(mutate, expected_fragment: str) -> None:
+                current = read_json(run_dir / "RUN_STATE.json")
+                mutate(current)
+                write_json_atomic(run_dir / "RUN_STATE.json", current)
+                errors = validate_run(run_dir)
+                self.assertTrue(
+                    any(expected_fragment in error for error in errors),
+                    f"expected {expected_fragment!r} in {errors}",
+                )
+                (run_dir / "RUN_STATE.json").write_text(pristine, encoding="utf-8")
+
+            def missing_finished_at(s):
+                del s["finished_at"]
+
+            def null_stop_reason(s):
+                s["stop_reason"] = None
+
+            def invented_stop_reason(s):
+                s["stop_reason"] = "graceful_success"
+
+            def status_contradicts_completed(s):
+                s["task_status"][task_id] = "failed"
+
+            def result_contradicts_completed(s):
+                s["task_results"][task_id]["success"] = False
+
+            def exhausted_with_failures(s):
+                s["completed"] = []
+                s["failed"] = [task_id]
+                s["task_status"][task_id] = "failed"
+
+            def run_ends_before_it_starts(s):
+                s["finished_at"] = "2020-01-01T00:00:00+00:00"
+
+            def stop_reason_before_stopped(s):
+                s["phase"] = "execute"
+
+            def task_ends_before_it_starts(s):
+                s["task_results"][task_id]["finished_at"] = "2020-01-01T00:00:00+00:00"
+
+            corrupt(missing_finished_at, "no parseable finished_at")
+            corrupt(null_stop_reason, "no stop reason")
+            corrupt(invented_stop_reason, "unknown stop reason")
+            corrupt(status_contradicts_completed, "disagree")
+            corrupt(result_contradicts_completed, "no successful result record")
+            corrupt(exhausted_with_failures, "contradicts a non-empty failed list")
+            corrupt(run_ends_before_it_starts, "finished before it was created")
+            corrupt(stop_reason_before_stopped, "still at phase execute")
+            corrupt(task_ends_before_it_starts, "finished before it started")
+            self.assertEqual(validate_run(run_dir), [], "restore left the run dirty")
+
     def test_worker_prompt_omits_source_snippets_and_marks_untrusted_data(self) -> None:
         task = {
             "id": "task-a",

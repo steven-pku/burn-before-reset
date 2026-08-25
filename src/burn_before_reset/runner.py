@@ -163,6 +163,21 @@ def _work_queue(
                 return "deadline_guard"
             if now >= drain_at:
                 return "drain_window"
+            worker_calls = int(state.get("worker_calls", 0))
+            if worker_calls >= config.execution.max_worker_calls_per_run:
+                # The absolute backstop on spend the run can observe: every worker
+                # launch — first attempts, quota retries, re-planned rounds — counts
+                # against one cap. The tool cannot see the provider's quota pool, so
+                # a runaway loop must be stopped by something that cannot be argued
+                # with locally.
+                _event(
+                    run_dir / "events.jsonl",
+                    "run.worker_call_cap",
+                    worker_calls=worker_calls,
+                    cap=config.execution.max_worker_calls_per_run,
+                )
+                return "worker_call_cap"
+            state["worker_calls"] = worker_calls + 1
             state["task_status"][task_id] = "running"
             write_json_atomic(run_dir / "RUN_STATE.json", state)
             _event(run_dir / "events.jsonl", "task.started", task_id=task_id)

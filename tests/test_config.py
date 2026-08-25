@@ -146,6 +146,102 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "drain-to-hard-stop"):
                 load_config(path)
 
+    def test_non_finite_durations_fail_closed(self) -> None:
+        # TOML expresses inf and nan; neither is negative, so a sign check alone
+        # lets them into deadline arithmetic and the SIGINT→SIGTERM→SIGKILL chain
+        # loses its bounded-stop guarantee. Every duration must be finite at load.
+        replacements = {
+            "sigint_grace_seconds": "sigint_grace_seconds = 0.5",
+            "sigterm_grace_seconds": "sigterm_grace_seconds = 0.5",
+            "task_timeout_seconds": "task_timeout_seconds = 20",
+            "max_tasks": "max_tasks = 3",
+        }
+        for field, line in replacements.items():
+            for bad in ("inf", "-inf", "nan"):
+                with self.subTest(field=field, value=bad), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    source = root / "source"
+                    source.mkdir()
+                    path = write_config(root / "config.toml", source, root / "output")
+                    text = path.read_text(encoding="utf-8").replace(line, f"{field} = {bad}")
+                    path.write_text(text, encoding="utf-8")
+                    with self.assertRaises(ConfigError):
+                        load_config(path)
+
+    def test_non_finite_probe_interval_fails_closed(self) -> None:
+        for bad in ("inf", "-inf", "nan"):
+            with self.subTest(value=bad), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = root / "source"
+                source.mkdir()
+                path = write_config(root / "config.toml", source, root / "output")
+                text = path.read_text(encoding="utf-8").replace(
+                    'mode = "safe"',
+                    f'mode = "safe"\nquota_replenish_probe_minutes = {bad}',
+                )
+                path.write_text(text, encoding="utf-8")
+                with self.assertRaises(ConfigError):
+                    load_config(path)
+
+
+class ClaudeCliContractTests(unittest.TestCase):
+    """`--safe-mode` is load-bearing but undocumented; preflight must probe for it.
+
+    A CLI release that drops or renames the flag must be caught before any model
+    call, not discovered as a mid-window worker exit — and never tolerated by
+    silently launching without it, which reopens the MCP write-tool exposure.
+    """
+
+    def _claude_config(self, root: Path, fake: Path):
+        import stat
+
+        source = root / "source"
+        source.mkdir()
+        (source / "work.md").write_text("# W\n\nTODO: x.\n", encoding="utf-8")
+        fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+        path = write_config(root / "config.toml", source, root / "output", enabled=True)
+        text = path.read_text(encoding="utf-8").replace(
+            "[execution]\nenabled = true",
+            f'[execution]\nenabled = true\nprovider = "claude"\nclaude_binary = "{fake}"',
+        )
+        path.write_text(text, encoding="utf-8")
+        return load_config(path)
+
+    def test_preflight_accepts_a_cli_advertising_every_load_bearing_flag(self) -> None:
+        from burn_before_reset.config import CLAUDE_LOAD_BEARING_FLAGS
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fake = root / "fake-claude"
+            flags = "\n".join(f"  {flag}  description" for flag in CLAUDE_LOAD_BEARING_FLAGS)
+            fake.write_text(f"#!/bin/sh\nprintf '%s\\n' 'Usage: claude'\ncat <<'EOF'\n{flags}\nEOF\n", encoding="utf-8")
+            config = self._claude_config(root, fake)
+            assert_execution_environment(config, {})
+
+    def test_preflight_fails_closed_when_safe_mode_is_not_advertised(self) -> None:
+        from burn_before_reset.config import CLAUDE_LOAD_BEARING_FLAGS
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fake = root / "fake-claude"
+            flags = "\n".join(
+                f"  {flag}  description" for flag in CLAUDE_LOAD_BEARING_FLAGS if flag != "--safe-mode"
+            )
+            fake.write_text(f"#!/bin/sh\ncat <<'EOF'\n{flags}\nEOF\n", encoding="utf-8")
+            config = self._claude_config(root, fake)
+            with self.assertRaisesRegex(ConfigError, "--safe-mode"):
+                assert_execution_environment(config, {})
+
+    def test_preflight_fails_closed_when_help_cannot_be_probed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fake = root / "fake-claude"
+            # Executable but not runnable as a program: exec fails at probe time.
+            fake.write_bytes(b"\x00\x01\x02")
+            config = self._claude_config(root, fake)
+            with self.assertRaises(ConfigError):
+                assert_execution_environment(config, {})
+
 
 if __name__ == "__main__":
     unittest.main()

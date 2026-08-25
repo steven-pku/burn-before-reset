@@ -10,7 +10,25 @@ record of what has actually been proven.
 
 ## [Unreleased]
 
+### Added
+
+- `execution.max_worker_calls_per_run`: an absolute per-run cap on worker
+  launches (first attempts, quota retries, and re-planned rounds all count) —
+  the one spend bound the tool can enforce itself, since it cannot observe the
+  server-side quota pool (third external audit).
+- `validate-run` now checks terminal-state semantics, not only hash integrity:
+  stop-reason vocabulary and compatibility, completed/failed/status/result
+  agreement, `finished_at` presence, and timestamp monotonicity.
+- Preflight probes `claude --help` for `--safe-mode` and every other
+  load-bearing worker flag, refusing the run if any is missing — the flag is
+  not in the published CLI reference and must not be assumed stable.
+
 ### Fixed
+
+- Non-finite durations (`inf`, `-inf`, `nan`) no longer pass configuration
+  validation: every duration, timeout, grace period, and probe interval must
+  be a finite bounded number, or the SIGINT→SIGTERM→SIGKILL escalation would
+  lose its bounded-stop guarantee (third external audit, reproduced).
 
 - Hardened v0.2 seams found by a two-seat external audit: `StopRequested` is a
   `BaseException` so a SIGTERM inside the worker window is no longer swallowed
