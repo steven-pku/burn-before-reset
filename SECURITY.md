@@ -25,6 +25,8 @@ Burn Before Reset is a local automation prototype, not a billing-control product
 
 Billing and auth detection reads the Worker's stderr and its error events. It deliberately does **not** read the artifact the Worker produced. Scanning the deliverable for words like "billing" or "rate limit" discards correct work whenever the user's own notes discuss pricing — including this project's own documentation. The cost of that choice: a Worker that reports a quota failure only in prose, with a zero exit status and no error event, would not be caught here. The run's other gates still apply.
 
+Quota-exhaustion matching is textual ("usage limit", "rate limit", both spellings). An org-level or proxy rate limit matches too and will be waited on as if the allowance could replenish; the wait is always bounded by the outer hard stop, but the label cannot distinguish those causes.
+
 Source-mutation detection is scoped to the indexer's allowlist and reports the paths that moved. Watching the whole root instead reports every background write inside it, which makes a real boundary violation indistinguishable from a sync client. Read the named paths before treating the signal as a violation.
 
 ## Known limitation

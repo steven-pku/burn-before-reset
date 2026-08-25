@@ -11,6 +11,12 @@ Every queued task must include:
 
 Missing deliverables, validation, source references, or write boundary make a task ineligible.
 
+Honesty note: the `validation` rules are instructions to the Worker and review guidance
+for the morning reader. The only checks the machine itself enforces are the safety
+predicate (exit status, guard, source snapshot, billing/permission signals) and a
+non-empty artifact. Mechanical execution of per-task validation rules is future work,
+not a current guarantee.
+
 ## Ranking
 
 Use 0–5 inputs:
