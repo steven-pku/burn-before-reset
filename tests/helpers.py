@@ -15,6 +15,7 @@ def write_config(
     reset_at: datetime | None = None,
     safety: int = 15,
     mode: str = "safe",
+    max_tasks: int = 3,
 ) -> Path:
     reset = reset_at or datetime.now(UTC) + timedelta(hours=3)
     path.write_text(
@@ -36,7 +37,7 @@ allow_provider_fallback = false
 [execution]
 enabled = {str(enabled).lower()}
 codex_binary = "{codex_binary}"
-max_tasks = 3
+max_tasks = {max_tasks}
 task_timeout_seconds = 20
 sigint_grace_seconds = 0.5
 sigterm_grace_seconds = 0.5

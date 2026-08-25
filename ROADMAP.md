@@ -9,7 +9,15 @@
 
 Exit gate: all automated tests, historical replay, forward test, fresh-process repository discovery, and requested post-fix terminal reviews pass or return a bounded, documented unavailable state. Lifecycle remains `candidate` until at least three real tasks succeed.
 
-## v0.2 · Safe pilot
+## v0.2 · Bounded autonomy — landed 2026-08-25
+
+- Product direction reset (DECISIONS 2026-08-25): the agent finds the work, one
+  up-front mode question, burn to completion. Safety lives in boundaries, not gates.
+- Multi-window continuation: quota exhaustion pauses (probe-and-retry), only the
+  outer reset stops. Re-planning rounds refill a drained queue from fresh signals.
+- `bbr discover`: vault-free source discovery over session logs, repos, documents.
+
+## Earlier v0.2 scope · Safe pilot
 
 - First explicit non-sensitive pilot: **done 2026-08-24**. One real Codex task ran end to end, its artifact was promoted, every receipt was reviewed, and the source roots stayed byte-identical. `PROMOTION_GATE` stands at 1/3.
 - Two further real runs with evidence and no boundary violations.

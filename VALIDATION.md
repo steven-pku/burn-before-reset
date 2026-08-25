@@ -349,3 +349,35 @@ Environment: a neutral directory containing only `.claude/skills/burn-before-res
 - **Sonnet**: found the Skill, enumerated the full activation gate — absolute `reset_at` with timezone, **which replenishment cycle it belongs to**, safety buffer, separate source/output roots, mode, billing confirmations, environment check — stated that any missing field stops at a question, and stopped at a question. This is the pass criterion as designed, including the two-cycle interrogation added 2026-08-25.
 - **Contamination caveat**: the Sonnet session followed the symlink into the repository and read `STATUS.md`, recognising the retest it was part of. The gate enumeration itself derives from `SKILL.md`, but the session was test-aware. A fully blind pass would require a copy of the Skill stripped of project state; accepted as-is for a candidate.
 - Cost of the whole retest: two probe turns, well under a dollar. The nine-hour execution premise was deliberately not simulated: burning non-expiring quota to test a tool whose premise is expiring quota fails the tool's own first principle. The full-premise execution test is scheduled for the night before the real weekly reset.
+
+---
+
+# v0.2 · Bounded autonomy · 2026-08-25
+
+Steven reset the product's center of gravity (DECISIONS 2026-08-25): the agent finds the most valuable work — the user may be asleep and does not know what should be done; discovery must not assume a note vault; exactly one up-front question (review the plan, or autopilot); and riding the inner replenishment cycle is a hard requirement, because quota left unburned is the failure mode. Safety moved from mid-flow approval gates into boundaries.
+
+## What landed
+
+- **Multi-window continuation.** A task that hits the allowance limit is not booked as failed: it returns to `queued`, the supervisor sleeps one probe interval (`quota_replenish_probe_minutes`, default 20), and the same task is retried — a retry against a still-closed window fails closed again at near-zero cost. Waits are bounded by the outer `hard_stop_at` and abort on operator stop. `reset_at` guidance inverted accordingly: it is now the **outer** reset; the previous guidance to point it at the inner window is superseded.
+- **Re-planning rounds.** A drained queue with more than one task-timeout of usable time left re-indexes the sources as they are now and freezes `QUEUE-r{n}.json`, excluding every task id already worked. A round that finds nothing new ends the run honestly — the no-filler rule survives the burn-to-completion goal because rounds still derive only from real signals.
+- **`bbr discover`.** Read-only proposals for source roots, most recently active first: Claude/Codex session logs (they exist for every user of these tools), then git repositories and markdown-rich directories under the standard work bases, pruned of hidden, dependency, and secret-like paths. On the development machine the first proposal was the Claude session-log root. Proposals are suggestions; choosing and tightening excludes stays upstream judgment.
+- **One-question flow.** SKILL.md now opens with the single delegation question (review vs autopilot). In autopilot, that answer is the standing authorization: discover → configure → plan → execute, no mid-flow gate; the morning review is where human judgment re-enters. The activation gate itself is unchanged.
+
+## Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Unit/integration suite | PASS | 69 tests. |
+| Continuation regression | PASS | Fake worker fails twice with a rate-limit message, then succeeds: run completes with `queue_exhausted`, `failed` empty, `quota_wait_cycles ≥ 2`. With `wait_for_replenish = false` the old single-window behaviour is preserved (`quota_exhausted`, task failed). |
+| Re-planning regression | PASS | Two source files, `max_tasks = 1`: round 2 picks up the second file (`completed = 2`, `rounds = 2`, `QUEUE-r2.json` frozen). One source file: no filler round is invented (`rounds = 1`). |
+| Old behaviour fails the new tests | PASS | With continuation and re-planning disabled in a scratch copy, both core tests fail. |
+| Discovery | PASS | Fixture home: session logs and a recent git tree proposed; `.ssh`-style directories never proposed. Real machine: first proposal is the Claude session-log root. CLI `discover --home` covered. |
+| Multi-round `validate-run` | PASS | Validation walks every frozen queue, checks per-round hashes, task-status key union, and completed deliverables across rounds. |
+| Schema drift | PASS | `quota_wait_cycles` and `rounds` added to the run-state contract; drift tests enforce it. |
+| ruff + actionlint | PASS | Clean. |
+
+## Still unproven
+
+1. A real overnight autopilot run under the new flow — discovery-chosen sources, a genuine closed-window wait, and a re-planned round against live quota. Scheduled for the night before the real weekly reset.
+2. Probe cost against real providers is assumed near-zero for a closed window; measured only against fakes.
+3. Artifact quality under autopilot-chosen sources — the judgment risk the mode question exists to price in — has no evidence yet either way.

@@ -21,6 +21,8 @@
     "source_check_incomplete",
     "billing_error_detected",
     "quota_exhausted",
+    "quota_wait_cycles",
+    "rounds",
     "guard_failure_detected",
     "stop_unconfirmed_detected",
     "task_results"
@@ -101,6 +103,30 @@
     "quota_exhausted": {
       "type": "boolean",
       "description": "The subscription allowance ran out. An ordinary end of a window, not a billing fault."
+    },
+    "quota_wait_cycles": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Times the supervisor slept waiting for the inner allowance to replenish."
+    },
+    "rounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "queue",
+          "tasks_sha256"
+        ],
+        "properties": {
+          "queue": {
+            "type": "string"
+          },
+          "tasks_sha256": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "One entry per frozen queue: the initial plan, then every re-planned round."
     },
     "guard_failure_detected": {
       "type": "boolean"

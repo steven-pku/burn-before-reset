@@ -207,7 +207,7 @@ def _run_plan(config: AppConfig, run_dir: Path, records: list[SourceRef], tasks:
         f"- Hard stop at: {config.run.hard_stop_at.isoformat()}",
         f"- Mode: {config.run.mode}",
         f"- Source roots: {len(config.sources)}",
-        f"- Indexed signals: {len(records)}",
+        f"- Eligible candidates: {len(records)}",
         f"- Frozen queue items: {len(tasks)}",
         "- Execution: disabled until an explicit `--execute` command and config gate both pass",
         "",
@@ -231,26 +231,70 @@ def _run_plan(config: AppConfig, run_dir: Path, records: list[SourceRef], tasks:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
-    current = now or datetime.now(tz=config.run.reset_at.tzinfo)
-    run_dir = _new_run_dir(config, current)
+def _eligible_tasks(
+    config: AppConfig,
+    run_dir: Path,
+    now: datetime,
+    exclude_ids: frozenset[str] = frozenset(),
+) -> tuple[list[TaskSpec], list[TaskSpec]]:
+    """Index the sources as they are right now and pick this round's queue."""
     records = index_all(config.sources)
-    candidates = [_task_from_record(record, run_dir, current) for record in records]
+    candidates = [_task_from_record(record, run_dir, now) for record in records]
     eligible = [
         task
         for task in candidates
         if task.score >= config.task_policy.minimum_score
         and task.risk <= config.task_policy.maximum_risk
         and task.human_dependency <= config.task_policy.maximum_human_dependency
+        and task.id not in exclude_ids
     ]
     eligible.sort(key=lambda task: (-task.score, task.id))
-    candidate_limit = config.task_policy.max_candidates
-    eligible = eligible[:candidate_limit]
+    eligible = eligible[: config.task_policy.max_candidates]
     queued = _diversify(eligible, config.execution.max_tasks)
+    return eligible, queued
+
+
+def plan_followup_round(
+    config: AppConfig,
+    run_dir: Path,
+    round_index: int,
+    exclude_ids: frozenset[str],
+    *,
+    now: datetime | None = None,
+) -> tuple[str, str, list[dict[str, Any]]] | None:
+    """Freeze another queue for a run whose first queue drained with time left.
+
+    Task ids hash the source reference, so everything already worked this run is
+    excluded and a source that produced a done task is not picked again. Returns
+    None when nothing new qualifies — the honest end of the night, not a failure.
+    """
+    current = now or datetime.now(tz=config.run.reset_at.tzinfo)
+    eligible, queued = _eligible_tasks(config, run_dir, current, exclude_ids)
+    if not queued:
+        return None
+    created_at = current.astimezone().isoformat(timespec="seconds")
+    queue_name = f"QUEUE-r{round_index}.json"
+    write_text_atomic(
+        run_dir / f"CANDIDATES-r{round_index}.jsonl",
+        "".join(json.dumps(task.to_dict(), ensure_ascii=False, sort_keys=True) + "\n" for task in eligible),
+    )
+    queue = freeze_queue(run_dir / queue_name, [task.to_dict() for task in queued], created_at)
+    with (run_dir / "RUN_PLAN.md").open("a", encoding="utf-8") as handle:
+        handle.write(f"\n## Round {round_index} · re-planned at {created_at}\n\n")
+        for index, task in enumerate(queued, 1):
+            handle.write(f"{index}. `{task.id}` · score {task.score} · {task.title}\n")
+    return queue_name, queue["tasks_sha256"], queue["tasks"]
+
+
+def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
+    current = now or datetime.now(tz=config.run.reset_at.tzinfo)
+    run_dir = _new_run_dir(config, current)
+    eligible, queued = _eligible_tasks(config, run_dir, current)
+    candidates = eligible
     created_at = current.astimezone().isoformat(timespec="seconds")
 
     candidate_lines = "".join(
-        json.dumps(task.to_dict(), ensure_ascii=False, sort_keys=True) + "\n" for task in candidates[:candidate_limit]
+        json.dumps(task.to_dict(), ensure_ascii=False, sort_keys=True) + "\n" for task in candidates
     )
     write_text_atomic(run_dir / "CANDIDATES.jsonl", candidate_lines)
     queue_tasks = [task.to_dict() for task in queued]
@@ -273,6 +317,8 @@ def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
         "source_check_incomplete": False,
         "billing_error_detected": False,
         "quota_exhausted": False,
+        "quota_wait_cycles": 0,
+        "rounds": [{"queue": "QUEUE.json", "tasks_sha256": queue["tasks_sha256"]}],
         "guard_failure_detected": False,
         "stop_unconfirmed_detected": False,
         "task_results": {},
@@ -280,5 +326,5 @@ def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
     write_json_atomic(run_dir / "RUN_STATE.json", state)
     write_text_atomic(run_dir / "CHECKPOINTS.md", "# Checkpoints\n\n")
     write_text_atomic(run_dir / "events.jsonl", "")
-    write_text_atomic(run_dir / "RUN_PLAN.md", _run_plan(config, run_dir, records, queue_tasks))
+    write_text_atomic(run_dir / "RUN_PLAN.md", _run_plan(config, run_dir, candidates, queue_tasks))
     return run_dir

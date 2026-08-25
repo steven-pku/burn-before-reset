@@ -22,6 +22,9 @@ class RunSettings:
     drain_window_minutes: int
     mode: str
     output_root: Path
+    wait_for_replenish: bool
+    quota_replenish_probe_minutes: float
+    replan_when_queue_empty: bool
 
 
 @dataclass(frozen=True)
@@ -139,6 +142,18 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
         raise ConfigError("drain_window_minutes must be greater than the safety buffer")
     if mode not in {"safe", "balanced"}:
         raise ConfigError("run.mode must be safe or balanced")
+    wait_for_replenish = run_data.get("wait_for_replenish", True)
+    if not isinstance(wait_for_replenish, bool):
+        raise ConfigError("run.wait_for_replenish must be true or false")
+    try:
+        probe_minutes = float(run_data.get("quota_replenish_probe_minutes", 20))
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("run.quota_replenish_probe_minutes must be a number") from exc
+    if not 0.005 <= probe_minutes <= 180:
+        raise ConfigError("run.quota_replenish_probe_minutes must be between 0.005 and 180")
+    replan_when_queue_empty = run_data.get("replan_when_queue_empty", True)
+    if not isinstance(replan_when_queue_empty, bool):
+        raise ConfigError("run.replan_when_queue_empty must be true or false")
     output_root = _absolute_path(run_data.get("output_root"), "run.output_root", must_exist=False)
     hard_stop_at = reset_at - timedelta(minutes=safety)
     current = now or datetime.now(tz=reset_at.tzinfo)
@@ -250,6 +265,9 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
             drain_window_minutes=drain,
             mode=mode,
             output_root=output_root,
+            wait_for_replenish=wait_for_replenish,
+            quota_replenish_probe_minutes=probe_minutes,
+            replan_when_queue_empty=replan_when_queue_empty,
         ),
         billing=billing,
         execution=execution,

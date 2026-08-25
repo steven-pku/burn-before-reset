@@ -1,10 +1,10 @@
 ---
 project_state: active
-stage: public-candidate
+stage: v0.2-bounded-autonomy
 health: amber
-updated_at: 2026-08-25T12:20:00+08:00
+updated_at: 2026-08-25T14:10:00+08:00
 next_action_owner: Steven
-next_action: Trigger retest passed (Sonnet, gate complete; Haiku trigger miss recorded). Replace OWNER, tag v0.1.0, create the remote, push; full-premise execution test lands the night before the real weekly reset.
+next_action: Replace OWNER (needs the GitHub handle), tag v0.2.0, create the remote, push. Full-premise autopilot run lands the night before the real weekly reset.
 blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Kimi 3 terminal review was inconclusive because the local CLI produced file-watcher errors and no model output.", "The CI workflow has never executed on GitHub.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do.", "`balanced` mode has never run against real Codex."]
 ---
 
@@ -36,7 +36,8 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 
 ## In progress
 
-- Trigger retest passed on 2026-08-25 (gate enumerated in full, execution refused pending answers; contamination and Haiku-miss caveats in VALIDATION.md). Push track unblocked pending the OWNER handle.
+- Trigger retest passed on 2026-08-25 (gate enumerated in full; caveats in VALIDATION.md).
+- **v0.2 bounded autonomy landed (2026-08-25)**: product direction reset per Steven — agent finds the work, one up-front mode question, burn to completion. Multi-window continuation (probe-and-retry across closed allowance windows), re-planning rounds, `bbr discover` vault-free source discovery. 69 tests; core continuation tests fail against the old behaviour.
 
 ## Blockers and risks
 
@@ -48,7 +49,7 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 ## Verification
 
 - `python3 -m py_compile scripts/bbr.py src/burn_before_reset/*.py`: PASS.
-- `PYTHONPATH=src python3 -m unittest discover`: PASS, 62 tests, Python 3.14.7.
+- `PYTHONPATH=src python3 -m unittest discover`: PASS, 69 tests, Python 3.14.7.
 - Regression tests confirmed to fail against the pre-repair behaviour: 7 of 10 failed in the first reverted scratch copy, and both tests from the second round failed in a second one. Positive-side tests pass in both states by design.
 - Schema drift tests: PASS; planner output matches the shipped contracts, and no undeclared fields are emitted.
 - `quick_validate.py <repo>`: PASS, Skill valid; description 527 of 1024 characters.

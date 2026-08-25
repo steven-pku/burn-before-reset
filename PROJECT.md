@@ -2,7 +2,7 @@
 
 ## Mission
 
-Turn expiring local AI subscription quota into useful, reviewable work and hard-stop before reset.
+Turn expiring subscription quota into useful, reviewable work the agent finds on its own, ride the inner allowance windows, and hard-stop only at the outer reset. Burning the quota to completion is the goal; quota left unburned is the failure mode.
 
 ## Primary deliverable
 
@@ -24,7 +24,10 @@ Turn expiring local AI subscription quota into useful, reviewable work and hard-
 - macOS and Linux; Python standard library only.
 - User-supplied reset time with timezone and a minimum ten-minute buffer.
 - Read-only indexing of explicitly allowlisted Codex/Claude session roots, Obsidian/Markdown roots, and Git repositories.
-- `safe` planning and an explicitly enabled local execution pilot; sequential workers only in v0.1.
+- `safe` planning and an explicitly enabled local execution pilot; sequential workers only.
+- One up-front delegation question (review vs autopilot); no mid-flow approval gates in autopilot.
+- Multi-window continuation (wait-and-retry across inner allowance resets) and re-planning rounds, bounded by the outer `reset_at`.
+- Read-only source discovery (`bbr discover`) over session logs, repositories, and document trees; a note vault is never assumed.
 - Frozen queue, atomic run state, checkpoints, JSONL events, stop marker, and morning report.
 - Core task packs: workspace archaeology, thread recovery, project health, PRD sync, and Skill grooming.
 

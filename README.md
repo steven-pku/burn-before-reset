@@ -4,7 +4,7 @@
 
 **Don’t burn tokens. Burn down your backlog.**
 
-Burn Before Reset turns expiring local Codex subscription quota into useful, reviewable work, then hard-stops the local process group before a user-supplied reset deadline.
+Burn Before Reset turns expiring subscription quota into useful, reviewable work the agent finds on its own — from session logs, repositories, and documents — then hard-stops before a user-supplied outer reset. A closed inner allowance window pauses the run; only the outer reset ends it.
 
 It indexes only sources you explicitly allow, builds a traceable candidate list, freezes a bounded queue, checkpoints every task, and produces one Morning Report. Token use is a constraint, not a KPI.
 
@@ -66,8 +66,15 @@ The command still refuses unless `execution.enabled = true` and every safety ass
 
 A `1` from a deadline stop means "ran out of time as designed", so treat it as an incomplete run rather than a fault, and read `MORNING_REPORT.md` before deciding.
 
-## What v0.1 does
+## What v0.2 does
 
+- One up-front mode question — review the plan, or full autopilot — then hands-off.
+- Source discovery without a note vault: `bbr discover` proposes session-log,
+  repository, and document roots by recent activity, read-only.
+- Riding inner allowance windows: on `usage limit`, the supervisor sleeps and retries
+  the same task until the window reopens; only the outer `reset_at` is a hard stop.
+- Re-planning rounds: a drained queue with usable time left is refilled from fresh
+  signals; a round that finds nothing ends the run honestly.
 - Strict preflight and deadline computation.
 - Deterministic, allowlisted Markdown/session/repository indexing.
 - Candidate extraction and value/risk scoring.
@@ -83,6 +90,7 @@ A `1` from a deadline stop means "ran out of time as designed", so treat it as a
 - Use API keys, paid Credits, provider fallback, or cloud jobs.
 - Mutate original Vaults or repositories.
 - Integrate patches, open PRs, create remotes, or push.
+- Invent filler tasks to burn quota: every task traces to a real signal in a real source.
 
 ## Repository layout
 

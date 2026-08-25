@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .config import ConfigError, assert_execution_environment, load_config
 from .deadline import guard_process
+from .discover import discover_sources, render_proposals
 from .planner import plan_run
 from .runner import execute_run, install_supervisor_signals
 from .validation import validate_run
@@ -31,6 +32,9 @@ def _parser() -> argparse.ArgumentParser:
 
     validate = subparsers.add_parser("validate-run")
     validate.add_argument("--run-dir", required=True, type=Path)
+
+    discover = subparsers.add_parser("discover")
+    discover.add_argument("--home", type=Path, default=None)
 
     guard = subparsers.add_parser("guard")
     guard.add_argument("--pid", required=True, type=int)
@@ -90,6 +94,9 @@ def main(argv: list[str] | None = None) -> int:
             state = execute_run(config, run_dir, entry_script)
             print(json.dumps({"run_dir": str(run_dir), "stop_reason": state["stop_reason"]}, indent=2))
             return 0 if state.get("stop_reason") == "queue_exhausted" and not state.get("failed") else 1
+        if args.command == "discover":
+            print(render_proposals(discover_sources(args.home)), end="")
+            return 0
         if args.command == "validate-run":
             errors = validate_run(args.run_dir.resolve())
             if errors:

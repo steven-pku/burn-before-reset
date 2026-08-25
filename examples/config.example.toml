@@ -1,5 +1,6 @@
 [run]
-# Replace this with the exact reset timestamp shown in the official usage UI.
+# The OUTER reset (usually weekly), from the official usage UI. The run rides the
+# inner ~5h windows on its own: a closed window pauses the run, only this stops it.
 reset_at = "2099-01-01T03:00:00+08:00"
 safety_buffer_minutes = 15
 drain_window_minutes = 30
@@ -8,6 +9,11 @@ mode = "safe"
 # Keep them off /tmp: it is world-readable and the OS clears it, so the receipts
 # you meant to review in the morning may not survive the night.
 output_root = "~/burn-before-reset-runs"
+# Ride inner allowance windows: on exhaustion, sleep and retry until replenished.
+wait_for_replenish = true
+quota_replenish_probe_minutes = 20
+# When the queue drains with usable time left, re-plan from fresh signals.
+replan_when_queue_empty = true
 
 [billing]
 # These are user assertions, not automated account verification.

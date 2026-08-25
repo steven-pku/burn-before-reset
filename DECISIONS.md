@@ -93,3 +93,16 @@ Record only approved decisions or approved evidence-driven reversals. Append new
 - Rationale: The first attempt failed at setup — the session started where the Skill was not discoverable, so the activation gate was never exercised. Prose setup instructions were the failure point; the environment must travel with the trigger sentence. Pushing first would ship an activation gate that has never once fired from natural language.
 - Alternatives: Skip the natural-trigger test and accept explicit invocation as sufficient; or install the Skill globally and test post-install discovery instead.
 - Revisit when: The retest runs — in either result — or the distribution form changes to a global install.
+
+## 2026-08-25 · Product direction: bounded autonomy, burn to completion
+
+- Status: `approved`
+- Decision maker: Steven
+- Decision: Four corrections to the product's center of gravity, in Steven's words:
+  1. The user does not know what should be done — **finding the most valuable work is the agent's job**, because the user may be asleep. Discovering valuable todos, known and unknown, is the product.
+  2. Discovery must not assume a note vault. The core competency is reading **recent Claude/Codex session logs, repositories, documents — the traces on the machine**.
+  3. Exactly **one question up front**: review the plan, or let the agent decide (看着办). Not a mid-flow approval gate the sleeping user can never answer.
+  4. **Riding the inner replenishment cycle is a hard requirement.** The goal is to burn the quota to completion before the outer reset; quota left unburned is failure. v0.2 builds this first.
+- Consequence: safety moves from mid-flow approval gates into **boundaries** — read-only sources, writes confined to the run directory, no external actions, billing fail-closed, the outer reset as an immovable hard stop. Autonomy governs what to work on; boundaries govern what it can touch. The v0.1 rule "an empty queue stops instead of inventing work" is superseded for time-remaining runs by **re-planning rounds** — new rounds still come only from real signals; a replan that finds nothing ends the run honestly.
+- Alternatives: keep the v0.1 review-first flow as default; or full autonomy without the up-front mode question.
+- Revisit when: a real overnight autopilot run produces artifacts Steven judges not worth their quota.
