@@ -534,6 +534,15 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
     started_at = datetime.now().astimezone()
     guard_ready_marker = worker_dir / "GUARD_READY"
     start_worker_marker = worker_dir / "START_WORKER"
+    # A quota retry reuses this task's worker_dir. Stale markers from the previous
+    # attempt would let the launcher exec before the new guard is ready and let the
+    # supervisor skip the readiness wait — the exact race the handshake exists to
+    # prevent. Each attempt starts with a clean handshake. (External audit, 2026-08-26.)
+    for marker in (guard_ready_marker, start_worker_marker):
+        try:
+            marker.unlink()
+        except FileNotFoundError:
+            pass
     with events_path.open("w", encoding="utf-8") as stdout, stderr_path.open("w", encoding="utf-8") as stderr:
         worker = subprocess.Popen(
             [
@@ -549,6 +558,12 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
             stdout=stdout,
             stderr=stderr,
             env=environment,
+            # The Claude worker reads freely in its working directory and --add-dir
+            # only ever widens that. Launched from the supervisor's cwd (possibly a
+            # home directory) its read surface would silently include everything
+            # there. Pin it to the empty staging dir so reads are staging + the
+            # granted source roots, nothing else. Codex already gets -C staging.
+            cwd=str(staging),
             start_new_session=True,
             text=True,
         )
@@ -643,8 +658,14 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
     if artifact:
         write_text_atomic(worker_dir / "FINAL_MESSAGE.md", artifact)
     stderr_text = stderr_path.read_text(encoding="utf-8", errors="replace")
+    permission_denied = False
     if config.execution.provider == "claude":
         diagnostic_text, worker_errors = _claude_diagnostics(events_path)
+        # A worker that reached for a tool it was not granted stayed inside the
+        # boundary only because the boundary held. Its output is suspect and is
+        # not promoted; SKILL.md's "stop on permission uncertainty" is enforced
+        # here mechanically, not just in prose.
+        permission_denied = bool(_claude_result(events_path).get("permission_denials"))
     else:
         diagnostic_text, worker_errors = _diagnostic_scan(events_path)
     scanned = stderr_text + "\n" + diagnostic_text
@@ -660,12 +681,20 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
         and not source_changed
         and not billing_error
         and not stop_now
+        and not permission_denied
         and bool(artifact.strip())
     )
     if success:
         write_text_atomic(artifact_path, artifact)
-    error_type = "NoFinalMessage" if not artifact.strip() else None
-    error_message = "worker produced no completed agent message" if error_type else None
+    if permission_denied:
+        error_type = "PermissionDenied"
+        error_message = "worker attempted a tool it was not granted; output kept as diagnostics only"
+    elif not artifact.strip():
+        error_type = "NoFinalMessage"
+        error_message = "worker produced no completed agent message"
+    else:
+        error_type = None
+        error_message = None
     return {
         "task_id": task_id,
         "success": success,

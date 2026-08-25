@@ -27,7 +27,7 @@ Read that as: the safety machinery is tested, the happy path has been exercised,
 - Planner never modifies source roots, and reads Git status without touching the repository index.
 - No delete, push, merge, deploy, publish, message, purchase, credential change, provider fallback, or Cloud Task.
 - A supervised watchdog controls the local worker process group; guard loss or unconfirmed shutdown fails the task.
-- The queue freezes before execution; empty queues stop instead of inventing work.
+- Each round's queue freezes before it is worked and is never added to; a drained queue with time left triggers a fresh frozen round, and a round that finds nothing ends the run instead of inventing work.
 - Worker prompts omit source snippets and treat locator metadata as untrusted data, not instructions.
 - Rehashed queues still reject unsafe task IDs and deliverable traversal; runtime task roots are rebound to configured sources and the current run directory.
 - Only a completed Worker `agent_message` that passes every safety check is promoted into `artifacts/`; failed output stays diagnostic.

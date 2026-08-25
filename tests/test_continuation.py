@@ -212,3 +212,181 @@ class DiscoverCliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuditFixTests(unittest.TestCase):
+    """Regressions for the 2026-08-26 external audit (sol + Grok) findings."""
+
+    def test_stop_requested_is_not_swallowed_as_a_task_failure(self) -> None:
+        # A signal arriving inside run_task's window must unwind, not become a
+        # fake worker crash booked into failed[].
+        from unittest.mock import patch
+
+        from burn_before_reset.runner import StopRequested, _work_queue
+
+        self.assertFalse(issubclass(StopRequested, Exception))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# W\n\nTODO: x.\n", encoding="utf-8")
+            config = load_config(write_config(root / "config.toml", source, root / "output", enabled=True))
+            run_dir = plan_run(config)
+            task = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))["tasks"][0]
+            state = json.loads((run_dir / "RUN_STATE.json").read_text(encoding="utf-8"))
+            with (
+                patch("burn_before_reset.runner.run_task", side_effect=StopRequested("signal 15")),
+                self.assertRaises(StopRequested),
+            ):
+                _work_queue(config, run_dir, state, [task], _entry_script(), "queue_exhausted")
+            self.assertEqual(state["failed"], [], "a stop signal was booked as a task failure")
+
+    def test_retry_clears_stale_handshake_markers(self) -> None:
+        # Stale GUARD_READY/START_WORKER from a previous attempt let the launcher
+        # exec before the new guard is ready. By the moment the worker process is
+        # spawned, both markers from the prior attempt must already be gone.
+        import subprocess as subprocess_module
+        from unittest.mock import patch
+
+        from burn_before_reset.worker import run_task
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# W\n\nTODO: x.\n", encoding="utf-8")
+            config = load_config(write_config(root / "config.toml", source, root / "output", enabled=True))
+            run_dir = plan_run(config)
+            task = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))["tasks"][0]
+            worker_dir = run_dir / "workers" / task["id"]
+            worker_dir.mkdir(parents=True, exist_ok=True)
+            stale_ready = worker_dir / "GUARD_READY"
+            stale_start = worker_dir / "START_WORKER"
+            stale_ready.write_text("stale\n", encoding="utf-8")
+            stale_start.write_text("stale\n", encoding="utf-8")
+
+            observed: dict[str, bool] = {}
+
+            class _Abort(RuntimeError):
+                pass
+
+            real_popen = subprocess_module.Popen
+
+            def probe(*args, **kwargs):
+                command = args[0] if args else kwargs.get("args", [])
+                if "worker-launch" not in command:
+                    # git init etc. — let it through untouched.
+                    return real_popen(*args, **kwargs)
+                observed["ready_gone"] = not stale_ready.exists()
+                observed["start_gone"] = not stale_start.exists()
+                raise _Abort("probe complete — no process is actually spawned")
+
+            with (
+                patch("burn_before_reset.worker.subprocess.Popen", side_effect=probe),
+                self.assertRaises(_Abort),
+            ):
+                run_task(config, task, run_dir, _entry_script())
+
+            self.assertTrue(
+                observed.get("ready_gone") and observed.get("start_gone"),
+                f"stale handshake markers survived to worker launch: {observed}",
+            )
+
+    def test_claude_worker_cwd_is_pinned_to_staging(self) -> None:
+        # Read/Grep are unprompted in the worker's cwd; inheriting the supervisor's
+        # cwd would silently widen the read surface to wherever bbr was launched.
+        from burn_before_reset.worker import run_task
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# W\n\nTODO: x.\n", encoding="utf-8")
+            fake = Path(root / "fake-claude")
+            fake.write_text(
+                "#!/bin/sh\n"
+                f'pwd > "{root}/worker-cwd.txt"\n'
+                "printf '%s' '{\"subtype\":\"success\",\"is_error\":false,\"result\":\"# Done\"}'\n",
+                encoding="utf-8",
+            )
+            fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+            config_path = write_config(root / "config.toml", source, root / "output", enabled=True)
+            text = config_path.read_text(encoding="utf-8").replace(
+                "[execution]\nenabled = true",
+                f'[execution]\nenabled = true\nprovider = "claude"\nclaude_binary = "{fake}"',
+            )
+            config_path.write_text(text, encoding="utf-8")
+            config = load_config(config_path)
+            run_dir = plan_run(config)
+            task = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))["tasks"][0]
+            result = run_task(config, task, run_dir, _entry_script())
+            self.assertTrue(result["success"], result)
+            recorded = Path(root / "worker-cwd.txt").read_text(encoding="utf-8").strip()
+            staging = (run_dir / "staging" / task["id"]).resolve()
+            self.assertEqual(Path(recorded).resolve(), staging, "worker cwd is not the staging dir")
+
+    def test_permission_denial_fails_the_task(self) -> None:
+        # A worker that reached for an ungranted tool stayed safe only because the
+        # boundary held; its output must not be promoted as a success.
+        from burn_before_reset.worker import run_task
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# W\n\nTODO: x.\n", encoding="utf-8")
+            fake = Path(root / "fake-claude")
+            fake.write_text(
+                "#!/bin/sh\n"
+                "printf '%s' '{\"subtype\":\"success\",\"is_error\":false,\"result\":\"# Done\","
+                "\"permission_denials\":[{\"tool_name\":\"Write\"}]}'\n",
+                encoding="utf-8",
+            )
+            fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+            config_path = write_config(root / "config.toml", source, root / "output", enabled=True)
+            text = config_path.read_text(encoding="utf-8").replace(
+                "[execution]\nenabled = true",
+                f'[execution]\nenabled = true\nprovider = "claude"\nclaude_binary = "{fake}"',
+            )
+            config_path.write_text(text, encoding="utf-8")
+            config = load_config(config_path)
+            run_dir = plan_run(config)
+            task = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))["tasks"][0]
+            result = run_task(config, task, run_dir, _entry_script())
+            self.assertFalse(result["success"], "denied tool attempt was promoted to success")
+            self.assertEqual(result["error_type"], "PermissionDenied")
+            self.assertIsNone(result["artifact"])
+
+    def test_validate_run_rejects_phantom_inflight_and_bad_round_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# W\n\nTODO: x.\n", encoding="utf-8")
+            fake = Path(root / "fake-codex")
+            fake.write_text(
+                "#!/bin/sh\nprintf '%s\\n' "
+                "'{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"# Done\"}}'\n",
+                encoding="utf-8",
+            )
+            fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+            config = load_config(
+                write_config(root / "config.toml", source, root / "output", enabled=True, codex_binary=str(fake))
+            )
+            run_dir = plan_run(config)
+            execute_run(config, run_dir, _entry_script())
+            self.assertEqual(validate_run(run_dir), [])
+
+            state_path = run_dir / "RUN_STATE.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            good = json.dumps(state)
+
+            task_id = next(iter(state["task_status"]))
+            state["task_status"][task_id] = "waiting_quota"
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            self.assertTrue(any("non-terminal" in e for e in validate_run(run_dir)))
+
+            state = json.loads(good)
+            state["rounds"][0]["tasks_sha256"] = "0" * 64
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            self.assertTrue(any("round ledger hash" in e for e in validate_run(run_dir)))

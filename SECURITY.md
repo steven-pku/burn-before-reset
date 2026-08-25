@@ -6,6 +6,9 @@ Burn Before Reset is a local automation prototype, not a billing-control product
 
 - Local CLI workers only: Codex CLI, or Claude Code in `safe` mode.
 - The Claude worker's read-only guarantee is tool absence, not denial: it is launched with `--safe-mode`, an empty strict MCP map, and only Read/Grep/Glob. Without `--safe-mode` a probe reached a connected cloud-storage write tool, so that flag is load-bearing.
+- The Claude worker's READ scope is its working directory plus the granted source roots — Read/Grep are unprompted in the cwd and `--add-dir` only ever widens it. The worker is therefore pinned to the empty staging directory as cwd; it is not confined to the allowlist the deterministic indexer uses, and a tool it attempts without a grant fails the task (`PermissionDenied`) rather than merely being logged.
+- The deadline guard is per-task. Between tasks, during replenishment waits, and during re-planning, the outer hard stop is enforced by the supervisor's own checks (bounded sleeps, per-task dispatch checks), not by an independent watchdog process. A wait or re-index cannot launch work past the hard stop, but the supervisor process itself may outlive it briefly.
+- For the Codex worker in `balanced` mode, "no external actions" rests on the Codex sandbox plus the Worker prompt; this repository adds no mechanical network/push gate of its own beyond the sandbox flag it passes. Treat that claim as sandbox-strength, not proof.
 - The supervisor ignores SIGHUP (an overnight run survives its launching session ending) and turns SIGTERM/SIGINT into a clean stop that still finalises every receipt (`operator_stop`).
 - Deterministic indexing reads only configured roots and rejects secret-like files.
 - Source roots are never modified by the planner. Git status is read with `--no-optional-locks`, so indexing a repository does not rewrite its index.

@@ -28,9 +28,10 @@ Yellow work requires explicit current-turn approval and `execution.enabled = tru
 - Less than sixty minutes before hard stop: plan-only mode.
 - Less than twenty minutes before hard stop: refuse to begin.
 - At hard stop: create `STOP_NOW`, stop dispatch, send SIGINT to the process group, then SIGTERM, then SIGKILL after bounded grace periods.
-- One window per run. `reset_at` belongs to the replenishment cycle the run sits in, not
-  to an outer weekly reset. v0.1 neither waits out a replenishment nor resumes a run that
-  has started tasks; exhaustion mid-window ends the run as `quota_exhausted`.
+- `reset_at` is the OUTER reset. The run rides inner replenishment windows: mid-run
+  exhaustion pauses the run (probe-and-retry, bounded by the hard stop), it does not
+  end it. Only a wait cut short — by the operator or the hard stop — or a run with
+  `wait_for_replenish = false` ends early over quota.
 
 ## Honest claims
 

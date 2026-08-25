@@ -45,7 +45,7 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 - Codex's documented sandbox provides write isolation, but not a project-specific read allowlist. The deterministic scanner is strict; worker read confinement is a known v0.1 limitation.
 - Server-side Credits/Auto top-up state is user-asserted, not mechanically verified; the tool cannot guarantee zero server-side billing.
 - Billing detection no longer reads the Worker's prose, so a quota failure reported only in the final message with a zero exit and no error event would not trip that specific check. See `SECURITY.md`.
-- The `$id` fields in `schemas/*.json` and the CI badge in `README.md` carry an `OWNER` placeholder that must be replaced at publication.
+- ~~The `$id` fields in `schemas/*.json` and the CI badge in `README.md` carry an `OWNER` placeholder that must be replaced at publication.~~ **Resolved 2026-08-25** — all four now point at `stevenpku-2026` (see the push entry above). Line kept struck through rather than deleted so the earlier caveat stays traceable.
 
 ## Verification
 

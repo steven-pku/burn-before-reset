@@ -19,8 +19,15 @@ from .state import (
 from .worker import run_task
 
 
-class StopRequested(Exception):
-    """The operator asked the supervisor to stop."""
+class StopRequested(BaseException):
+    """The operator asked the supervisor to stop.
+
+    Deliberately NOT an Exception subclass: the worker loop wraps `run_task` in
+    `except Exception` to convert worker crashes into task failures, and a signal
+    arriving inside that window must not be swallowed into a fake failure. As a
+    BaseException it unwinds through the worker-stopping BaseException guards in
+    `run_task` and reaches the finalizer as an operator stop. (Found by external
+    audit, 2026-08-26.)"""
 
 
 _stop_requested = False
@@ -126,10 +133,14 @@ def _wait_for_replenishment(config: AppConfig, run_dir: Path, state: dict[str, A
         if _stop_requested:
             return False
         now = datetime.now(tz=config.run.reset_at.tzinfo)
-        if now >= config.run.hard_stop_at:
+        remaining_to_stop = (config.run.hard_stop_at - now).total_seconds()
+        if remaining_to_stop <= 0:
             return False
-        time.sleep(min(5.0, max(0.05, deadline - time.monotonic())))
-    return not _stop_requested
+        # Bound each sleep by the hard stop as well as the probe window, so the
+        # supervisor cannot oversleep past the outer deadline.
+        time.sleep(min(5.0, max(0.05, deadline - time.monotonic()), max(0.05, remaining_to_stop)))
+    now = datetime.now(tz=config.run.reset_at.tzinfo)
+    return not _stop_requested and now < config.run.hard_stop_at
 
 
 def _work_queue(
@@ -206,6 +217,9 @@ def _work_queue(
                 and not _stop_requested
                 and not result["billing_error"]
                 and not result["source_changed"]
+                and not result["deadline_stop"]
+                and not result["timed_out"]
+                and not result.get("guard_failed")
             ):
                 # The window closed mid-run. This is not a failure of the task, so it
                 # is not booked as one: the task goes back to queued, the supervisor
@@ -217,7 +231,13 @@ def _work_queue(
                 state["task_status"][task_id] = "failed"
                 state["failed"].append(task_id)
                 write_json_atomic(run_dir / "RUN_STATE.json", state)
-                return "operator_stop" if _stop_requested else "quota_exhausted"
+                if _stop_requested:
+                    return "operator_stop"
+                now = datetime.now(tz=config.run.reset_at.tzinfo)
+                # A wait cut short by the outer deadline is the deadline stopping the
+                # run, not the window failing to reopen; mislabelling it sends the
+                # morning reader chasing the wrong cause.
+                return "deadline_guard" if now >= config.run.hard_stop_at else "quota_exhausted"
 
             state["task_status"][task_id] = "failed"
             state["failed"].append(task_id)
@@ -266,7 +286,15 @@ def execute_run(config: AppConfig, run_dir: Path, entry_script: Path) -> dict[st
     _event(run_dir / "events.jsonl", "run.started", run_id=state["run_id"])
     stop_reason = "queue_exhausted"
     try:
-        stop_reason = _work_queue(config, run_dir, state, list(queue.get("tasks", [])), entry_script, stop_reason)
+        try:
+            stop_reason = _work_queue(config, run_dir, state, list(queue.get("tasks", [])), entry_script, stop_reason)
+        except StopRequested:
+            raise
+        except Exception as exc:
+            # A supervisor-level crash must still leave readable receipts; a run
+            # stuck at phase "execute" with no stop reason cannot be resumed.
+            _event(run_dir / "events.jsonl", "run.supervisor_exception", error_type=type(exc).__name__)
+            stop_reason = "supervisor_exception"
         # Burn to completion: a drained queue with usable time left is not the end
         # of the night. Re-plan against the sources as they are now; a round that
         # finds nothing new ends the run honestly — no filler tasks are invented.
@@ -277,12 +305,17 @@ def execute_run(config: AppConfig, run_dir: Path, entry_script: Path) -> dict[st
             and _time_for_another_round(config)
         ):
             round_index = len(state.get("rounds", [])) + 1
-            planned = plan_followup_round(
-                config,
-                run_dir,
-                round_index,
-                exclude_ids=frozenset(state.get("task_status", {})),
-            )
+            try:
+                planned = plan_followup_round(
+                    config,
+                    run_dir,
+                    round_index,
+                    exclude_ids=frozenset(state.get("task_status", {})),
+                )
+            except Exception as exc:
+                _event(run_dir / "events.jsonl", "round.plan_failed", round_index=round_index, error_type=type(exc).__name__)
+                stop_reason = "planner_exception"
+                break
             if planned is None:
                 _event(run_dir / "events.jsonl", "round.nothing_left", round_index=round_index)
                 break
@@ -298,6 +331,13 @@ def execute_run(config: AppConfig, run_dir: Path, entry_script: Path) -> dict[st
         stop_reason = "operator_stop"
 
     state["phase"] = "stopped"
+    for task_id, status in list(state.get("task_status", {}).items()):
+        if status in ("running", "waiting_quota"):
+            # A stop that lands mid-task or mid-wait must not leave a phantom
+            # in-flight entry in a stopped run's ledger.
+            state["task_status"][task_id] = "failed"
+            if task_id not in state["failed"]:
+                state["failed"].append(task_id)
     state["stop_reason"] = stop_reason
     state["finished_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
     write_json_atomic(run_dir / "RUN_STATE.json", state)
