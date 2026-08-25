@@ -2,7 +2,7 @@
 project_state: active
 stage: v0.2-bounded-autonomy
 health: amber
-updated_at: 2026-08-26T00:40:00+08:00
+updated_at: 2026-08-26T03:20:00+08:00
 next_action_owner: Steven
 next_action: Full-premise autopilot run the night before the weekly reset; iterate on artifact quality from there.
 blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Kimi 3 terminal review was inconclusive because the local CLI produced file-watcher errors and no model output.", "CI is live on GitHub: the first run failed on tests that assumed codex/claude were installed; hermetic fixes landed and the suite must stay green there.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do.", "`balanced` mode has never run against real Codex."]
@@ -39,6 +39,7 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 - Trigger retest passed on 2026-08-25 (gate enumerated in full; caveats in VALIDATION.md).
 - **Pushed to GitHub (2026-08-25, private, `stevenpku-2026/burn-before-reset`)**. First real CI run failed — six tests assumed codex/claude were installed on the runner, an assumption every local run masked. Tests made hermetic (interpreter binary as stand-in; fakes where a worker actually launches), plus a preflight regression for the missing-binary error. OWNER placeholders resolved to the real handle.
 - **v0.2 bounded autonomy landed (2026-08-25)**: product direction reset per Steven — agent finds the work, one up-front mode question, burn to completion. Multi-window continuation (probe-and-retry across closed allowance windows), re-planning rounds, `bbr discover` vault-free source discovery. 69 tests; core continuation tests fail against the old behaviour.
+- **README publication pass (2026-08-26)**: audited against the vault README spec. Added static license/python badges and a contents line, inserted the missing edit-config step into Quick start (the full `cp` → `validate-config` → `plan` pipeline was re-run locally against scratch sources, final exit `0`), removed a stale "v0.1" adapter version claim, linked LICENSE. English-only confirmed as the deliberate language choice. Launch assets still to produce before publication: CHANGELOG, 1280×640 social preview image, terminal demo GIF (charmbracelet/vhs).
 
 ## Blockers and risks
 

@@ -1,12 +1,16 @@
 # Burn Before Reset 🔥
 
 [![tests](https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml/badge.svg)](https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square)](pyproject.toml)
 
 **Don’t burn tokens. Burn down your backlog.**
 
 Burn Before Reset turns expiring subscription quota into useful, reviewable work the agent finds on its own — from session logs, repositories, and documents — then hard-stops before a user-supplied outer reset. A closed inner allowance window pauses the run; only the outer reset ends it.
 
 It indexes only sources you explicitly allow, builds a traceable candidate list, freezes a bounded queue, checkpoints every task, and produces one Morning Report. Token use is a constraint, not a KPI.
+
+**Contents**: [Status](#current-status) · [Safety model](#safety-model) · [Quick start](#quick-start) · [Exit codes](#exit-codes) · [What v0.2 does](#what-v02-does) · [What it does not do](#what-it-does-not-do) · [Layout](#repository-layout) · [Agents](#which-agents-can-run-this) · [License](#license)
 
 ## Current status
 
@@ -40,9 +44,13 @@ Requires Python 3.11+, Git, and a locally authenticated Codex CLI or Claude Code
 
 ```bash
 cp examples/config.example.toml config.local.toml
+# Edit config.local.toml first: replace the /absolute/path/to/... placeholders
+# with your real source roots, and point output_root somewhere durable.
 python3 scripts/bbr.py validate-config --config config.local.toml
 python3 scripts/bbr.py plan --config config.local.toml
 ```
+
+`validate-config` refuses placeholder paths with exit `2` — that is the gate working, not a bug. Once it prints `"valid": true`, `plan` writes a run directory under `output_root`.
 
 Review the generated `RUN_PLAN.md`, `CANDIDATES.jsonl`, and frozen `QUEUE.json` before any Worker run.
 
@@ -119,7 +127,7 @@ containing `../..`; the CLI and the tests are unaffected.
 The Skill file itself is portable — plain `SKILL.md` with `name` and `description`
 frontmatter — and both Codex CLI and Claude Code discover it from this checkout.
 
-**Two worker adapters ship in v0.1.** `execution.provider = "codex"` shells out to
+**Two worker adapters ship.** `execution.provider = "codex"` shells out to
 `codex exec` under its sandbox (`safe` or `balanced`). `execution.provider = "claude"`
 shells out to Claude Code headless, `safe` mode only: the worker is launched with
 `--safe-mode`, an empty strict MCP configuration, and nothing beyond Read/Grep/Glob —
@@ -133,4 +141,4 @@ See [SECURITY.md](SECURITY.md) before enabling execution and [research-2026-08-2
 
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).
