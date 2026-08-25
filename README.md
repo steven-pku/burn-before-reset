@@ -4,6 +4,8 @@
 [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square)](pyproject.toml)
 
+English · [中文](./README.zh-CN.md)
+
 **Don’t burn tokens. Burn down your backlog.**
 
 Burn Before Reset turns expiring subscription quota into useful, reviewable work the agent finds on its own — from session logs, repositories, and documents — then hard-stops before a user-supplied outer reset. A closed inner allowance window pauses the run; only the outer reset ends it.
