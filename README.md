@@ -10,6 +10,10 @@ Burn Before Reset turns expiring subscription quota into useful, reviewable work
 
 It indexes only sources you explicitly allow, builds a traceable candidate list, freezes a bounded queue, checkpoints every task, and produces one Morning Report. Token use is a constraint, not a KPI.
 
+<img alt="Plan-only quick start: validate-config, plan, and the run directory it writes" src="assets/demo.gif" width="700" />
+
+The demo above is generated from [assets/demo.tape](assets/demo.tape) with [vhs](https://github.com/charmbracelet/vhs) — plan-only, against throwaway demo sources.
+
 **Contents**: [Status](#current-status) · [Safety model](#safety-model) · [Quick start](#quick-start) · [Exit codes](#exit-codes) · [What v0.2 does](#what-v02-does) · [What it does not do](#what-it-does-not-do) · [Layout](#repository-layout) · [Agents](#which-agents-can-run-this) · [License](#license)
 
 ## Current status
