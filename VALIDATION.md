@@ -302,3 +302,41 @@ One incidental finding: the verifying script's own `os.killpg(pgid, 0)` raised `
 2. The guard firing **inside a real bbr run**. Test 2 exercised the guard directly. A run whose worker is still going when the hard stop arrives requires a task that outlives the sixty-minute execution gate, so it has not been staged.
 3. Escalation beyond SIGINT. The live process stopped at the first signal, so SIGTERM and SIGKILL against real Codex remain unit-tested only.
 4. Sources at real scale. All runs used a handful of small files. Indexing a full vault or a large repository is untested for both duration and candidate quality.
+
+---
+
+# Second worker adapter, hardening, and a test that did not run · 2026-08-25
+
+## Claude Code worker adapter
+
+`execution.provider = "claude"` shells out to Claude Code headless. Its read-only guarantee is **tool absence**: `--safe-mode`, `--strict-mcp-config` with an empty server map, and only Read/Grep/Glob granted.
+
+- **Negative test that shaped the design**: with only the built-in tools restricted, a worker told to "use any tool available including cloud storage" reached for a connected Google Drive `create_file` MCP tool (blocked by `dontAsk`, but visible). With `--safe-mode` + strict empty MCP map, the same probe saw no such tool at all: `permission_denials` empty, no file created, source checksums unchanged.
+- Two real end-to-end pilots passed: `queue_exhausted`, exit 0, artifact promoted, sources byte-identical, guard exit 0, `validate-run` clean.
+- The first pilot's artifact opened with 200 characters of tooling apologia because `deliverables` read as a write instruction; the Worker prompt now states it is a filing location. The second pilot's artifact opened with content and explicitly declared which files it had *not* read.
+- `balanced` mode is refused for this provider at config load: its read-only story cannot survive handing write tools back, and that path is unproven.
+
+## Quota exhaustion separated from billing fault
+
+Claude reports hitting its allowance as a structured `stop_reason: "usage_limit"` (snake_case); the billing term list matched only the prose spelling, so exhaustion would have surfaced as `invalid_worker_output`. Exhaustion is now its own signal — `quota_exhausted`, matched in both spellings — and is documented as an ordinary end of window, not a fault. The activation gate now also asks which replenishment cycle `reset_at` belongs to, and states plainly that v0.1 runs a single window: no waiting out a mid-run replenishment, no resuming a started run.
+
+## Supervisor survival
+
+Before: SIGTERM to the supervisor killed it silently — `phase: execute`, `stop_reason: None`, no Morning Report, worker and guard orphaned, and the run unresumable. Measured directly by killing a live supervisor.
+After: SIGHUP is ignored (an overnight run survives its launching session closing, no `nohup` needed); SIGTERM/SIGINT finalise every receipt and stop the worker group — `stop_reason: operator_stop`, zero orphans, `validate-run` clean. Integration tests cover both, and both fail against the previous behaviour.
+
+## Scoring and queue composition
+
+On a real 2,604-file corpus the previous scorer put 194 of 200 candidates on one score, so the queue was ordered by content hash — an arbitrary sample. Every scoring input now varies with the source, a `recency` term was added (weight 2), and the queue fills round-robin across projects because recency otherwise lets the most recently touched project sweep every slot: measured before the fix, all queue slots came from one directory; after, 12 slots covered 12 projects, scores spread across 18 distinct values. Degenerate titles fall back to path-with-parent. `max_tasks` cap raised 10 → 200 (the real bounds are the hard stop, drain window, and per-task timeout). All helper binaries resolve to absolute paths at preflight, so a missing `codex`/`claude`/`git`/`ps` fails before the window opens, not during it.
+
+## Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Unit/integration suite | PASS | 62 tests. |
+| Regression tests fail against old behaviour | PASS | Scorer (2), supervisor (2), timezone + discovery (2) each confirmed red in reverted scratch copies; schema-drift tests caught newly added result fields twice. |
+| ruff + actionlint | PASS | Both clean; both wired into CI alongside the matrix. |
+
+## Natural-language trigger test · DID NOT RUN
+
+The planned experiment — a fresh session, a neutral directory, one natural-language sentence, no coaching — **failed at setup and produced zero signal about the Skill**. The session was launched from a directory where the Skill was not discoverable (no repository checkout, no project or global skill link), so no gate could fire. The session interpreted the sentence as a general request and did 36 minutes of unrelated (useful) work; the runner was never invoked; no run directory exists for that night. Recorded here because an absent test is easy to later misread as a passed one. The test is to be re-run with a scripted setup that places the session where the Skill is discoverable before the sentence is uttered.

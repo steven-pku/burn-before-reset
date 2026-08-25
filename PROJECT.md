@@ -20,7 +20,7 @@ Turn expiring local AI subscription quota into useful, reviewable work and hard-
 
 ## In scope
 
-- Codex CLI as the only v0.1 model worker adapter.
+- Two local worker adapters: Codex CLI (sandboxed, `safe` or `balanced`) and Claude Code (`safe` only; read-only by tool absence).
 - macOS and Linux; Python standard library only.
 - User-supplied reset time with timezone and a minimum ten-minute buffer.
 - Read-only indexing of explicitly allowlisted Codex/Claude session roots, Obsidian/Markdown roots, and Git repositories.

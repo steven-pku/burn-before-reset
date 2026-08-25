@@ -9,7 +9,7 @@ Turn quota that is about to expire into work that is traceable, reviewable, and 
 
 ## When to use this
 
-The user explicitly wants to use up local subscription quota before it resets: workspace archaeology across allowed roots, freezing a bounded queue of high-value tasks, running a safe local Codex worker, or producing a Morning Report.
+The user explicitly wants to use up local subscription quota before it resets: workspace archaeology across allowed roots, freezing a bounded queue of high-value tasks, running a safe local worker (Codex CLI or Claude Code, per `execution.provider`), or producing a Morning Report.
 
 ## When not to use this
 
@@ -26,7 +26,7 @@ Obtain and read back every field below. If any one is missing, stop at a questio
 - A safety buffer of at least ten minutes; fifteen by default.
 - Explicit read-only source roots and a separate output root.
 - Mode `safe` or `balanced`.
-- The user's confirmation that the Credits balance is zero, auto top-up is off, and the local ChatGPT/Codex subscription login is in use.
+- The user's confirmation that, for the selected provider, no pay-per-use balance can be drawn (Credits zero, auto top-up / extra-usage off) and the local subscription login is in use.
 - No `OPENAI_API_KEY` or `CODEX_API_KEY` in the current process environment.
 
 If the window to `reset_at` is longer than one replenishment cycle, say this plainly

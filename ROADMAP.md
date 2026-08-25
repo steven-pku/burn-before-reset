@@ -22,5 +22,5 @@ Exit gate: three real tasks pass, lifecycle can become `verified`, and Steven ap
 
 - Public release as a `candidate`: approved 2026-08-24. Topics and launch content follow that decision.
 - Package as a plugin only if broad installation or connectors justify it.
-- Optional Claude Code adapter, UI, notifications, or community task packs after separate safety review.
+- Claude Code adapter: landed early, in v0.1 (2026-08-25), `safe` mode only, after its own negative tests. Remaining here: UI, notifications, community task packs after separate safety review.
 - Global installation and any `verified` claim stay gated on 3/3 real successful runs.

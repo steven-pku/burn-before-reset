@@ -4,7 +4,9 @@ Burn Before Reset is a local automation prototype, not a billing-control product
 
 ## Supported boundary
 
-- Local Codex CLI only.
+- Local CLI workers only: Codex CLI, or Claude Code in `safe` mode.
+- The Claude worker's read-only guarantee is tool absence, not denial: it is launched with `--safe-mode`, an empty strict MCP map, and only Read/Grep/Glob. Without `--safe-mode` a probe reached a connected cloud-storage write tool, so that flag is load-bearing.
+- The supervisor ignores SIGHUP (an overnight run survives its launching session ending) and turns SIGTERM/SIGINT into a clean stop that still finalises every receipt (`operator_stop`).
 - Deterministic indexing reads only configured roots and rejects secret-like files.
 - Source roots are never modified by the planner. Git status is read with `--no-optional-locks`, so indexing a repository does not rewrite its index.
 - The Worker environment is filtered before launch. Variables that supply a credential or redirect the model endpoint are removed and recorded in `workers/<task>/DROPPED_ENV.txt`. `--ignore-user-config` only covers `$CODEX_HOME/config.toml`, so this closes the environment half of the same gate. Proxy variables are kept deliberately: they change how a request is routed, not which account is billed.

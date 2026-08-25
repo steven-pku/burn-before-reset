@@ -36,7 +36,7 @@ Important: Codex's standard sandbox constrains writes but does not provide a rep
 
 ## Quick start
 
-Requires Python 3.11+, Git, and a locally authenticated Codex CLI.
+Requires Python 3.11+, Git, and a locally authenticated Codex CLI or Claude Code CLI (set `execution.provider`).
 
 ```bash
 cp examples/config.example.toml config.local.toml
@@ -72,7 +72,7 @@ A `1` from a deadline stop means "ran out of time as designed", so treat it as a
 - Deterministic, allowlisted Markdown/session/repository indexing.
 - Candidate extraction and value/risk scoring.
 - Immutable frozen queue and atomic run state.
-- Sequential local Codex Worker adapter with JSONL capture.
+- Sequential local worker adapter — Codex CLI or Claude Code — with full event capture.
 - Supervised deadline watchdog, confirmed-stop receipts, checkpoints, stop reason, and Morning Report even on ordinary Worker exceptions.
 - Dry-run and fake-worker integration tests.
 
@@ -111,12 +111,15 @@ containing `../..`; the CLI and the tests are unaffected.
 The Skill file itself is portable — plain `SKILL.md` with `name` and `description`
 frontmatter — and both Codex CLI and Claude Code discover it from this checkout.
 
-**The worker is not portable.** v0.1 shells out to `codex exec`, and that is the only
-model adapter. So under Claude Code you get the full activation gate, the deadline
-arithmetic, planning, the frozen queue, and the receipts, but `--execute` still needs
-Codex CLI installed and logged in. A Claude Code adapter is v0.3 work, not a promise
-made here. Since plan-only is the default path anyway, this is less limiting than it
-sounds — but read it before assuming "works with my agent" means "runs with my agent".
+**Two worker adapters ship in v0.1.** `execution.provider = "codex"` shells out to
+`codex exec` under its sandbox (`safe` or `balanced`). `execution.provider = "claude"`
+shells out to Claude Code headless, `safe` mode only: the worker is launched with
+`--safe-mode`, an empty strict MCP configuration, and nothing beyond Read/Grep/Glob —
+read-only because the write tools are absent, not merely denied. Running out of
+allowance mid-run ends the run as `quota_exhausted`, an ordinary stop distinct from
+`billing_or_auth_error`. Other agents can still *discover* the Skill without being able
+to *execute* it — read the boundary before assuming "works with my agent" means "runs
+with my agent".
 
 See [SECURITY.md](SECURITY.md) before enabling execution and [research-2026-08-24.md](references/research-2026-08-24.md) for the evidence and competitor comparison.
 

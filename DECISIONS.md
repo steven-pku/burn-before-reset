@@ -84,3 +84,12 @@ Record only approved decisions or approved evidence-driven reversals. Append new
 - Rationale: Steven asked whether the Skill is portable across agents. Discovery and execution are separate questions and had opposite answers. A probe confirmed a Claude Code session in the repository answered `NO` before the symlink and `YES` after; the worker remains Codex-only regardless. Since plan-only is the default path, discovery alone is genuinely useful, but the README must not let "works with my agent" be read as "runs with my agent".
 - Alternatives: Ship only the Codex path; or hold discovery until a Claude Code worker adapter exists.
 - Revisit when: A second worker adapter lands, or another agent's discovery convention needs a third path.
+
+## 2026-08-25 · Retest the trigger path before pushing
+
+- Status: `approved`
+- Decision maker: Steven
+- Decision: The natural-language trigger test is re-run with a scripted, copy-paste setup (neutral directory + repository skill link + session launched inside it) before the repository is pushed. Documentation is swept now; OWNER replacement, tag, and push wait for the retest result.
+- Rationale: The first attempt failed at setup — the session started where the Skill was not discoverable, so the activation gate was never exercised. Prose setup instructions were the failure point; the environment must travel with the trigger sentence. Pushing first would ship an activation gate that has never once fired from natural language.
+- Alternatives: Skip the natural-trigger test and accept explicit invocation as sufficient; or install the Skill globally and test post-install discovery instead.
+- Revisit when: The retest runs — in either result — or the distribution form changes to a global install.

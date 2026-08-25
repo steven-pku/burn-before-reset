@@ -2,10 +2,10 @@
 project_state: active
 stage: public-candidate
 health: amber
-updated_at: 2026-08-25T00:20:00+08:00
+updated_at: 2026-08-25T12:20:00+08:00
 next_action_owner: Steven
-next_action: Replace the OWNER placeholder, create the public remote, and push v0.1.0.
-blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Kimi 3 terminal review was inconclusive because the local CLI produced file-watcher errors and no model output.", "The CI workflow has never executed on GitHub.", "`balanced` mode has never run against real Codex."]
+next_action: Re-run the natural-language trigger test with a scripted setup; on pass, replace OWNER, tag v0.1.0, create the remote, and push.
+blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Kimi 3 terminal review was inconclusive because the local CLI produced file-watcher errors and no model output.", "The CI workflow has never executed on GitHub.", "The natural-language trigger test has not yet run: the first attempt failed at setup (Skill undiscoverable from the launch directory).", "`balanced` mode has never run against real Codex."]
 ---
 
 # Burn Before Reset · Status
@@ -29,10 +29,14 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 - **First real pilot (2026-08-24)**: `queue_exhausted`, exit `0`, one artifact promoted, source roots byte-identical, guard confirmed, every receipt reviewed.
 - **Bounded coverage test (2026-08-25)**: designed against what pilot 1 left unproven rather than against the number 3. A `git`-source run with two tasks (both succeeded, `.git/index` mtime unchanged end to end), plus a direct guard test that stopped a live Codex process group at `deadline_guard:sigint` with the group independently confirmed dead. Repaired mixed-timezone checkpoint stamps and added Claude Code skill discovery.
 - Desensitised the repository for publication: no absolute home paths, no unrelated internal project names.
+- **Claude Code worker adapter (2026-08-25)**: `execution.provider = "claude"`, read-only by tool absence (`--safe-mode` + strict empty MCP + Read/Grep/Glob), `safe` mode only, two real pilots passed. A probe without `--safe-mode` reached a connected cloud-storage write tool — that flag is load-bearing.
+- **Quota exhaustion separated from billing fault (2026-08-25)**: `quota_exhausted` stop reason, both spellings matched; activation gate now asks which replenishment cycle `reset_at` belongs to.
+- **Supervisor survival (2026-08-25)**: SIGHUP ignored, SIGTERM/SIGINT finalise receipts (`operator_stop`), zero orphans; previously a killed supervisor left an unreadable, unresumable run.
+- **Scorer rewrite + queue diversity (2026-08-25)**: 194-of-200 identical scores → 18 distinct values on the same corpus; round-robin across projects; `max_tasks` cap 10 → 200; all helper binaries resolved at preflight.
 
 ## In progress
 
-- None. The repository is ready to publish as a candidate.
+- Awaiting the trigger-path retest (scripted setup). Documentation is swept and committed; OWNER/tag/push are sequenced behind the retest per DECISIONS 2026-08-25.
 
 ## Blockers and risks
 
@@ -44,7 +48,7 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 ## Verification
 
 - `python3 -m py_compile scripts/bbr.py src/burn_before_reset/*.py`: PASS.
-- `PYTHONPATH=src python3 -m unittest discover`: PASS, 49 tests, Python 3.14.7.
+- `PYTHONPATH=src python3 -m unittest discover`: PASS, 62 tests, Python 3.14.7.
 - Regression tests confirmed to fail against the pre-repair behaviour: 7 of 10 failed in the first reverted scratch copy, and both tests from the second round failed in a second one. Positive-side tests pass in both states by design.
 - Schema drift tests: PASS; planner output matches the shipped contracts, and no undeclared fields are emitted.
 - `quick_validate.py <repo>`: PASS, Skill valid; description 527 of 1024 characters.
@@ -58,4 +62,4 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 
 ## One next action
 
-Replace `OWNER` in `schemas/*.json` and the README badge, create the public remote, and push `v0.1.0`.
+Re-run the natural-language trigger test from a directory where the Skill is discoverable, using the scripted one-paste setup. On pass: replace `OWNER`, tag `v0.1.0`, create the remote, push.
