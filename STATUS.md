@@ -4,8 +4,8 @@ stage: public-candidate
 health: amber
 updated_at: 2026-08-25T12:20:00+08:00
 next_action_owner: Steven
-next_action: Re-run the natural-language trigger test with a scripted setup; on pass, replace OWNER, tag v0.1.0, create the remote, and push.
-blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Kimi 3 terminal review was inconclusive because the local CLI produced file-watcher errors and no model output.", "The CI workflow has never executed on GitHub.", "The natural-language trigger test has not yet run: the first attempt failed at setup (Skill undiscoverable from the launch directory).", "`balanced` mode has never run against real Codex."]
+next_action: Trigger retest passed (Sonnet, gate complete; Haiku trigger miss recorded). Replace OWNER, tag v0.1.0, create the remote, push; full-premise execution test lands the night before the real weekly reset.
+blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Kimi 3 terminal review was inconclusive because the local CLI produced file-watcher errors and no model output.", "The CI workflow has never executed on GitHub.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do.", "`balanced` mode has never run against real Codex."]
 ---
 
 # Burn Before Reset · Status
@@ -36,7 +36,7 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 
 ## In progress
 
-- Awaiting the trigger-path retest (scripted setup). Documentation is swept and committed; OWNER/tag/push are sequenced behind the retest per DECISIONS 2026-08-25.
+- Trigger retest passed on 2026-08-25 (gate enumerated in full, execution refused pending answers; contamination and Haiku-miss caveats in VALIDATION.md). Push track unblocked pending the OWNER handle.
 
 ## Blockers and risks
 
@@ -62,4 +62,4 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 
 ## One next action
 
-Re-run the natural-language trigger test from a directory where the Skill is discoverable, using the scripted one-paste setup. On pass: replace `OWNER`, tag `v0.1.0`, create the remote, push.
+Replace `OWNER` (needs the GitHub handle), tag `v0.1.0`, create the remote, push. The full-premise execution test runs the night before the real weekly reset.

@@ -340,3 +340,12 @@ On a real 2,604-file corpus the previous scorer put 194 of 200 candidates on one
 ## Natural-language trigger test · DID NOT RUN
 
 The planned experiment — a fresh session, a neutral directory, one natural-language sentence, no coaching — **failed at setup and produced zero signal about the Skill**. The session was launched from a directory where the Skill was not discoverable (no repository checkout, no project or global skill link), so no gate could fire. The session interpreted the sentence as a general request and did 36 minutes of unrelated (useful) work; the runner was never invoked; no run directory exists for that night. Recorded here because an absent test is easy to later misread as a passed one. The test is to be re-run with a scripted setup that places the session where the Skill is discoverable before the sentence is uttered.
+
+## Scripted trigger retest · 2026-08-25 · gate PASS, trigger model-dependent
+
+Environment: a neutral directory containing only `.claude/skills/burn-before-reset` (symlink to this checkout), verified discoverable. Same trigger sentence as the failed attempt, headless, no coaching.
+
+- **Haiku**: confirmed the Skill in its inventory when asked directly, but did **not** invoke it for a sentence nearly verbatim to the description's trigger phrases. It answered generically. Trigger reliability is model-dependent; recorded, not patched — blind description iteration against one weak model is worse than the data.
+- **Sonnet**: found the Skill, enumerated the full activation gate — absolute `reset_at` with timezone, **which replenishment cycle it belongs to**, safety buffer, separate source/output roots, mode, billing confirmations, environment check — stated that any missing field stops at a question, and stopped at a question. This is the pass criterion as designed, including the two-cycle interrogation added 2026-08-25.
+- **Contamination caveat**: the Sonnet session followed the symlink into the repository and read `STATUS.md`, recognising the retest it was part of. The gate enumeration itself derives from `SKILL.md`, but the session was test-aware. A fully blind pass would require a copy of the Skill stripped of project state; accepted as-is for a candidate.
+- Cost of the whole retest: two probe turns, well under a dollar. The nine-hour execution premise was deliberately not simulated: burning non-expiring quota to test a tool whose premise is expiring quota fails the tool's own first principle. The full-premise execution test is scheduled for the night before the real weekly reset.
