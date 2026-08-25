@@ -180,7 +180,7 @@ Four defects were reproduced, two of them against this repository's own files. A
 - `task_policy.minimum_score` is inert at its default. Enumerating all 48 planner input combinations gives scores of 30–43; the default threshold of 12 rejects 0 of 48, and `maximum_risk = 2` rejects 0 of 48 because risk is only ever 0 or 1. The only filter that fires by default is `maximum_human_dependency = 1`, which removes all 16 combinations carrying a `decision` signal. Scoring therefore ranks; it does not gate.
 - `claude_sessions` is accepted as a source type but has no adapter distinct from `markdown`. Transcript lines matching a signal are excerpted into `CANDIDATES.jsonl`, which sits uneasily beside the guidance in `source-adapters.md`.
 - The Codex skill inventory truncates descriptions to fit its context budget when many skills are installed; on the audit host only the first ~64 characters survived. The description is now front-loaded so its opening clause stands alone.
-- `schemas/*.json` carry an `$id` under `https://github.com/OWNER/...`. `OWNER` is a placeholder to be replaced at publication.
+- `schemas/*.json` carry an `$id` under `https://github.com/stevenpku-2026/...`. resolved to `stevenpku-2026` at push.
 
 ## Mechanical checks
 

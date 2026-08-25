@@ -26,7 +26,7 @@ from burn_before_reset.worker import (
     run_task,
 )
 
-from .helpers import write_config
+from .helpers import HERMETIC_BINARY, write_config
 
 
 def _events(path: Path, records: list[dict]) -> Path:
@@ -443,7 +443,8 @@ class ClaudeWorkerTests(unittest.TestCase):
         (source / "work.md").write_text("# Work\n\nTODO: verify this.\n", encoding="utf-8")
         path = write_config(root / "config.toml", source, root / "output", enabled=True)
         text = path.read_text(encoding="utf-8").replace(
-            '[execution]\nenabled = true', '[execution]\nenabled = true\nprovider = "claude"'
+            '[execution]\nenabled = true',
+            f'[execution]\nenabled = true\nprovider = "claude"\nclaude_binary = "{HERMETIC_BINARY}"'
         )
         path.write_text(text, encoding="utf-8")
         return load_config(path), source

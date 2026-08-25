@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+# Tests must not depend on codex or claude being installed on the machine running
+# them — the first real CI run failed on exactly that assumption. The interpreter
+# binary is an absolute, always-executable stand-in for tests that never launch a
+# worker; tests that do launch one pass their own fake script explicitly.
+HERMETIC_BINARY = sys.executable
 
 
 def write_config(
@@ -11,7 +18,7 @@ def write_config(
     *,
     source_type: str = "markdown",
     enabled: bool = False,
-    codex_binary: str = "codex",
+    codex_binary: str = HERMETIC_BINARY,
     reset_at: datetime | None = None,
     safety: int = 15,
     mode: str = "safe",

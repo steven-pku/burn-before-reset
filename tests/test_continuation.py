@@ -170,6 +170,28 @@ class DiscoverTests(unittest.TestCase):
             self.assertEqual([p for p in proposals if "ssh" in str(p.root)], [])
 
 
+class MissingWorkerBinaryTests(unittest.TestCase):
+    """The first real CI run failed because tests assumed codex was installed."""
+
+    def test_missing_worker_binary_fails_preflight_with_a_clear_error(self) -> None:
+        from burn_before_reset.config import ConfigError, assert_execution_environment
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# W\n\nTODO: x.\n", encoding="utf-8")
+            config = load_config(
+                write_config(
+                    root / "config.toml", source, root / "output", enabled=True,
+                    codex_binary="definitely-not-a-real-binary-7f3a",
+                )
+            )
+            with self.assertRaises(ConfigError) as caught:
+                assert_execution_environment(config, {})
+            self.assertIn("not found on PATH", str(caught.exception))
+
+
 class DiscoverCliTests(unittest.TestCase):
     def test_discover_command_prints_proposals(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
