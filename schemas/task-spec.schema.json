@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/stevenpku-2026/burn-before-reset/schemas/task-spec.schema.json",
+  "$id": "https://github.com/steven-pku/burn-before-reset/schemas/task-spec.schema.json",
   "title": "Burn Before Reset TaskSpec",
   "type": "object",
   "additionalProperties": false,

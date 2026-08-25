@@ -1,6 +1,6 @@
 # Burn Before Reset 🔥
 
-[![tests](https://github.com/stevenpku-2026/burn-before-reset/actions/workflows/tests.yml/badge.svg)](https://github.com/stevenpku-2026/burn-before-reset/actions/workflows/tests.yml)
+[![tests](https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml/badge.svg)](https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml)
 
 **Don’t burn tokens. Burn down your backlog.**
 
