@@ -106,3 +106,12 @@ Record only approved decisions or approved evidence-driven reversals. Append new
 - Consequence: safety moves from mid-flow approval gates into **boundaries** — read-only sources, writes confined to the run directory, no external actions, billing fail-closed, the outer reset as an immovable hard stop. Autonomy governs what to work on; boundaries govern what it can touch. The v0.1 rule "an empty queue stops instead of inventing work" is superseded for time-remaining runs by **re-planning rounds** — new rounds still come only from real signals; a replan that finds nothing ends the run honestly.
 - Alternatives: keep the v0.1 review-first flow as default; or full autonomy without the up-front mode question.
 - Revisit when: a real overnight autopilot run produces artifacts Steven judges not worth their quota.
+
+## 2026-08-25 · Push now, iterate on GitHub, announce later
+
+- Status: `approved`
+- Decision maker: Steven
+- Decision: Push the repository to GitHub now and iterate there; the public announcement waits until the optimisation loop has run its course. Pushing and announcing are decoupled.
+- Rationale: CI gets its first real signal, iteration gains a verifiable history, and the eventual announcement ships with evidence of sustained work instead of a single drop. The Monday-night full-premise autopilot run becomes part of the optimisation loop rather than a release gate.
+- Amends: the sequencing half of "Publish as a public candidate after one real pilot" (2026-08-24). The candidate framing and honest-status README stand unchanged.
+- Revisit when: Steven judges the optimisation loop done and calls the announcement.
