@@ -381,3 +381,37 @@ Steven reset the product's center of gravity (DECISIONS 2026-08-25): the agent f
 1. A real overnight autopilot run under the new flow — discovery-chosen sources, a genuine closed-window wait, and a re-planned round against live quota. Scheduled for the night before the real weekly reset.
 2. Probe cost against real providers is assumed near-zero for a closed window; measured only against fakes.
 3. Artifact quality under autopilot-chosen sources — the judgment risk the mode question exists to price in — has no evidence yet either way.
+
+---
+
+# External audit (second-opinion, two seats) · 2026-08-26
+
+Steven commissioned an independent audit after the push. Rationale: the maintainer of v0.2 is also its author, so the in-house review lane had collapsed into self-review. Two seats, different vendors, same contract (anchors mandatory, problems only, no edits), run blind to each other against the local checkout. Identity verified channel-side; working tree fingerprint identical before and after both audits.
+
+- **GPT-5.6 sol** (`codex exec --sandbox read-only`): 10 findings.
+- **Grok 4.6** (`grok -p`): 13 findings, plus an explicit "checked, found nothing" list.
+
+Every adopted finding was verified against the source before any fix. Nothing either seat reported was fabricated; overlap between seats (replan unbounded past the hard stop, stale SKILL step 7, unverified round hashes) raised confidence rather than conflict.
+
+## Adopted and fixed (commits `a2a0edf`→`da39…` series, CI green)
+
+1. **Signal swallow (Grok 🔴)** — `StopRequested` subclassed `Exception`, so a SIGTERM landing inside the worker window was caught by `except Exception` and booked as a fake task failure; the v0.2 supervisor test had passed only because `_failure_stop_reason` checks the flag first. Now a `BaseException`, unwinding through the worker-stopping guards to a clean `operator_stop`.
+2. **Stale handshake markers (Grok 🔴)** — a quota retry reused the task's `worker_dir`, so `GUARD_READY`/`START_WORKER` from the previous attempt let the launcher exec before the new guard was ready — defeating the exact race the handshake exists to prevent. Markers are now unlinked at the start of every attempt; a probe-based test asserts they are gone at worker launch.
+3. **Claude worker read surface (Grok 🔴)** — the worker `Popen` set no `cwd`, and Claude's Read/Grep are unprompted in the cwd while `--add-dir` only widens: launched from a home directory, the worker could read everything there. Cwd is now pinned to the empty staging dir; SECURITY discloses the read-scope model.
+4. **Denied tool attempts promoted (sol 🔴)** — the success predicate ignored `permission_denials`: a worker that reached for an ungranted tool and returned a non-empty answer was promoted. Now fails as `PermissionDenied`, output kept as diagnostics only.
+5. **Replan/supervisor exceptions stranded runs (sol 🔴)** — only `StopRequested` was caught around the round loop; an indexing or freeze error left `phase: execute`, no stop reason, no report, unresumable. Now finalised as `planner_exception`/`supervisor_exception`.
+6. **Wait-loop deadline seams (Grok 🟡)** — sleeps are now bounded by the hard stop as well as the probe window; the post-probe return re-checks the hard stop; a wait cut short by the deadline is labelled `deadline_guard`, not `quota_exhausted`; waits are refused after deadline/timeout/guard failures.
+7. **Ledger integrity (sol 🟡 + Grok 🟡)** — `validate-run` now verifies each round ledger hash against its frozen queue and rejects `running`/`waiting_quota` in a stopped run; finalisation normalises in-flight statuses; the morning report states per-round freezing instead of the false "no task added after freeze" constant.
+8. **Claim/implementation seams (both 🔴/🟡)** — SKILL step 7 ("two rounds, no substantive improvement" — a v0.1 fossil), SKILL's quota line ("stop on quota uncertainty" vs the wait loop), risk-policy's "one window per run", README's "queue freezes before execution": all rewritten to describe what the code does. Honesty notes added: per-task `validation` rules are guidance, not machine enforcement (sol); textual rate-limit matching cannot distinguish org limits from allowance windows (sol).
+
+Five new regression tests; all confirmed red against the pre-fix behaviour in a reverted scratch copy (5/5). Full suite 75 tests, green in both the normal and the codex/claude-masked environment; CI green on GitHub.
+
+## Declined or deferred
+
+- **Mechanical execution of per-task validation rules** (sol): real, large; recorded as future work with the honest note above, not patched under audit pressure.
+- **A dedicated cap on replenishment waits** (sol): the outer hard stop already bounds the worst case; a cap would add a second knob for the same ceiling. Disclosure chosen instead.
+- **Process-level watchdog for between-task windows** (Grok): the supervisor's bounded 5s polling plus per-task dispatch checks now cover the seams found; a standing second process is queued for consideration with the v0.3 resume work, not bolted on tonight.
+
+## Seat performance
+
+Both seats added real value. sol was strongest on state-machine escape paths and claim-vs-code accounting; Grok was strongest on the v0.2 seams (handshake lifecycle, signal semantics, read-surface widening) and disciplined about not re-reporting settled v0.1 findings. No fabricated finding from either seat. Keep both.
