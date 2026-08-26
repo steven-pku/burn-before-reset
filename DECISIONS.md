@@ -115,3 +115,11 @@ Record only approved decisions or approved evidence-driven reversals. Append new
 - Rationale: CI gets its first real signal, iteration gains a verifiable history, and the eventual announcement ships with evidence of sustained work instead of a single drop. The Monday-night full-premise autopilot run becomes part of the optimisation loop rather than a release gate.
 - Amends: the sequencing half of "Publish as a public candidate after one real pilot" (2026-08-24). The candidate framing and honest-status README stand unchanged.
 - Revisit when: Steven judges the optimisation loop done and calls the announcement.
+
+## 2026-08-26 · Closeout board: dry run first, announce after autopilot, close the two tails
+
+- Status: `approved`
+- Decision maker: Steven (closeout decision board, receipts D1/D2/D3)
+- Decision: (D1) a short-window autopilot dry run happens this week before the full-premise overnight run; (D2) the public flip and skill-directory submissions follow a passing autopilot run; (D3) `balanced` mode was closed with one real workspace-write run rather than by waiver, and the inconclusive Kimi review lane is closed as compensated by three completed independent audit seats.
+- Evidence: balanced run `run-20260826-141005-01c39da3` — 2/2 tasks, sources byte-identical, `validate-run` clean.
+- Revisit when: the dry run or the overnight run surfaces artifact-quality problems.

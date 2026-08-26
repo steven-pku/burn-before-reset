@@ -2,10 +2,10 @@
 project_state: active
 stage: v0.2-bounded-autonomy
 health: amber
-updated_at: 2026-08-26T13:30:00+08:00
+updated_at: 2026-08-26T14:20:00+08:00
 next_action_owner: Steven
-next_action: Full-premise autopilot run the night before the weekly reset; iterate on artifact quality from there.
-blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Kimi 3 terminal review was inconclusive because the local CLI produced file-watcher errors and no model output.", "CI is live on GitHub: the first run failed on tests that assumed codex/claude were installed; hermetic fixes landed and the suite must stay green there.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do.", "`balanced` mode has never run against real Codex."]
+next_action: Short-window autopilot dry run this week (Steven's call D1-B), then the full-premise run before the weekly reset; announce after it passes (D2-A).
+blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do."]
 ---
 
 # Burn Before Reset · Status

@@ -449,3 +449,7 @@ Steven commissioned a third seat after the two-seat round: **GPT-5.6 Pro**, cont
 ## Seat performance
 
 Strong on input-domain and ledger-semantics reasoning; both correctness findings were real and one was demonstrated by construction. The `--safe-mode` finding needed the implementation-side correction above — right defect class, wrong factual premise — which is exactly why adopted findings are verified against the tree first. The design-layer finding restated some already-priced boundaries but drove one genuinely missing control. Keep, with the verify-before-adopt step non-negotiable.
+
+## Balanced mode · first real run · 2026-08-26 · PASS
+
+Commissioned by Steven to close the long-standing `blocked_by` item. One real `codex exec --sandbox workspace-write` run (`run-20260826-141005-01c39da3`), git source with a dirty tree: 2/2 tasks completed, artifacts promoted, `validate-run` clean, guard exit 0 with confirmed stop. Source bytes and `.git/index` mtime identical before and after — the `--no-optional-locks` and snapshot guarantees hold under the write-capable sandbox too; the worker chose not to use its staging write area, which is permitted. With this, both remaining `blocked_by` tails close: balanced is now evidence-backed, and the Kimi review lane's inconclusive result is treated as compensated by the three completed independent audit seats (sol, Grok 4.6, GPT-5.6 Pro).
