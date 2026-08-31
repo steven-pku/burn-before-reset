@@ -108,3 +108,19 @@ Every run directory contains `RUN_PLAN.md`, `CANDIDATES.jsonl`, `QUEUE.json`, `R
 - TaskSpec, scoring, and the freeze rule: [task-contract.md](references/task-contract.md)
 - Research evidence and competitor boundaries: [research-2026-08-24.md](references/research-2026-08-24.md)
 - Task packs: read only the requested file under `task-packs/`. Never load them all.
+
+## What the night actually produces
+
+Findings are shaped by what was found, not by one generic objective:
+
+| What the indexer saw | What the worker is asked for |
+|---|---|
+| an open decision | the options, the evidence for each, what is still missing — deciding made cheap, not decided |
+| an unverified claim | confirmed / refuted / uncheckable-from-here, each with its evidence |
+| a blocker | what blocks it, whether it needs a person or only work, what can still move tonight |
+| a dirty repository | a reviewable patch plan, never a patch |
+| a recorded next step | the thread recovered and the step made executable |
+| a project with several findings | a whole-project sweep: what is abandoned, duplicated, superseded or half-migrated that **nobody wrote down** |
+
+The last row is the one a marker search cannot reach on its own, and it is capped at
+a third of the queue: sweeps are the breadth of a night, targeted tasks are its bulk.

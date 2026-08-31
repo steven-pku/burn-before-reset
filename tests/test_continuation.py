@@ -551,3 +551,53 @@ class ArchetypeTests(unittest.TestCase):
             queue = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))
             kinds = {t["title"].split(":", 1)[0] for t in queue["tasks"]}
             self.assertGreaterEqual(len(kinds), 2, "the whole window went to one kind of work")
+
+
+class SweepTaskTests(unittest.TestCase):
+    """Regex finds work someone wrote down; a sweep finds the work nobody did."""
+
+    def _corpus(self, root: Path, projects: int, files: int) -> Path:
+        source = root / "source"
+        for index in range(projects):
+            folder = source / f"proj{index}"
+            folder.mkdir(parents=True)
+            for n in range(files):
+                (folder / f"n{n}.md").write_text(f"# p{index}n{n}\n\nTODO: something.\n", encoding="utf-8")
+        return source
+
+    def test_a_busy_project_earns_a_whole_project_task(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self._corpus(root, projects=2, files=6)
+            config = load_config(write_config(root / "config.toml", source, root / "output", max_tasks=6))
+            run_dir = plan_run(config)
+            queue = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))
+            sweeps = [t for t in queue["tasks"] if t["id"].startswith("sweep-")]
+            self.assertTrue(sweeps, "no whole-project task was offered for a busy project")
+            task = sweeps[0]
+            # The sweep must be able to read the project, not just one file.
+            self.assertEqual(task["allowed_read_roots"], [str(source.resolve())])
+            self.assertIn("nobody recorded", task["objective"])
+
+    def test_a_thin_project_gets_no_sweep(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self._corpus(root, projects=1, files=2)
+            config = load_config(write_config(root / "config.toml", source, root / "output", max_tasks=6))
+            run_dir = plan_run(config)
+            queue = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))
+            self.assertFalse(
+                [t for t in queue["tasks"] if t["id"].startswith("sweep-")],
+                "a two-file project does not need a whole-project sweep",
+            )
+
+    def test_sweeps_never_take_more_than_a_third_of_the_window(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self._corpus(root, projects=8, files=6)
+            config = load_config(write_config(root / "config.toml", source, root / "output", max_tasks=9))
+            run_dir = plan_run(config)
+            queue = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))
+            sweeps = [t for t in queue["tasks"] if t["id"].startswith("sweep-")]
+            self.assertLessEqual(len(sweeps), 3, "sweeps are the breadth of a night, not its bulk")
+            self.assertTrue(sweeps, "and there should still be some")

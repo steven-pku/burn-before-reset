@@ -243,6 +243,85 @@ def _archetype(signals: set[str]) -> tuple[str, str, tuple[str, ...]]:
     return DEFAULT_ARCHETYPE
 
 
+# How many marked findings a project needs before a whole-project sweep is worth a
+# window slot. Below this, the per-file candidates already cover it.
+SWEEP_MIN_RECORDS = 4
+SWEEP_OBJECTIVE = (
+    "Survey this project as a whole. The per-file findings elsewhere in this run cover work "
+    "that someone already wrote down as unfinished; your job is the rest — what is abandoned, "
+    "duplicated, superseded, or half-migrated that nobody recorded. Read widely across the "
+    "project before concluding. Produce: what state the project is actually in, the specific "
+    "things that look wrong or stale with the evidence for each, and what you would do first. "
+    "Distinguish what you verified from what you inferred, and say what you could not check."
+)
+SWEEP_VALIDATION = (
+    "artifact describes the project's actual state, not a restatement of its own docs",
+    "every finding cites specific files as evidence",
+    "findings nobody had recorded are separated from ones the project already tracks",
+    "unverified inferences are labelled, and unchecked areas are named",
+)
+
+
+def _sweep_tasks(records: list[SourceRef], run_dir: Path, now: datetime) -> list[TaskSpec]:
+    """One whole-project task per project with enough going on to be worth a look.
+
+    Regex over file text can only surface work somebody already labelled unfinished.
+    The most valuable findings in a neglected workspace — a project abandoned mid-
+    migration, two directories doing the same job, a plan overtaken by events — were
+    never written down anywhere, so no marker exists to match. Handing a worker the
+    whole project and asking what is wrong is the only way to reach them.
+    """
+    by_project: dict[tuple[str, str], list[SourceRef]] = {}
+    for record in records:
+        if record.source_type not in {"markdown", "git"}:
+            continue
+        parts = PurePosixPath(record.path).parts
+        if not parts or len(parts) < 2:
+            continue
+        by_project.setdefault((record.root, parts[0]), []).append(record)
+
+    tasks: list[TaskSpec] = []
+    for (root, project), members in sorted(by_project.items()):
+        if len(members) < SWEEP_MIN_RECORDS:
+            continue
+        newest = max(member.modified_at for member in members)
+        signals = sorted({signal for member in members for signal in member.signals})
+        reference = SourceRef(
+            source_type="markdown",
+            root=root,
+            path=project,
+            modified_at=newest,
+            title=f"{project} (whole project)",
+            signals=tuple(signals),
+            snippets=(f"{len(members)} files in this project carry unfinished-work markers",),
+        )
+        task_id = "sweep-" + hashlib.sha256(f"{root}\0{project}".encode()).hexdigest()[:12]
+        tasks.append(
+            TaskSpec(
+                id=task_id,
+                title=f"Sweep the project for what nobody wrote down: {project}",
+                objective=SWEEP_OBJECTIVE,
+                source_refs=(reference.to_dict(),),
+                deliverables=(f"artifacts/{task_id}.md",),
+                allowed_read_roots=(root,),
+                allowed_write_root=str(run_dir),
+                validation=SWEEP_VALIDATION,
+                strategic_value=5,
+                reuse=5,
+                readiness=_clamp(max(1, min(5, len(members) // 3))),
+                verifiability=3,
+                recency=_recency(newest, now),
+                checkpointability=4,
+                # A whole project is a wider read than a single file: less bounded,
+                # and worth more of the window per task.
+                token_fitness=2,
+                risk=0,
+                human_dependency=0,
+            )
+        )
+    return tasks
+
+
 def _group_key(task: TaskSpec) -> str:
     """The bucket a candidate competes in, for queue diversity.
 
@@ -344,6 +423,7 @@ def _eligible_tasks(
     """Index the sources as they are right now and pick this round's queue."""
     records = index_all(config.sources)
     candidates = [_task_from_record(record, run_dir, now) for record in records]
+    candidates.extend(_sweep_tasks(records, run_dir, now))
     eligible = [
         task
         for task in candidates
@@ -354,7 +434,15 @@ def _eligible_tasks(
     ]
     eligible.sort(key=lambda task: (-task.score, task.id))
     eligible = eligible[: config.task_policy.max_candidates]
-    queued = _diversify(eligible, config.execution.max_tasks)
+    # Sweeps read a whole project and cost more of the window each; they are the
+    # breadth of the night, not its bulk. Left uncapped they take most of the queue
+    # simply because every project offers one and they all score alike.
+    sweep_cap = max(1, config.execution.max_tasks // 3)
+    sweeps = [task for task in eligible if task.id.startswith("sweep-")][:sweep_cap]
+    targeted = [task for task in eligible if not task.id.startswith("sweep-")]
+    keep = {task.id for task in sweeps}
+    shortlist = [task for task in eligible if task.id in keep or task in targeted]
+    queued = _diversify(shortlist, config.execution.max_tasks)
     return eligible, queued
 
 
