@@ -1,8 +1,8 @@
 ---
 project_state: active
-stage: v0.2-bounded-autonomy
+stage: v0-2-bounded-autonomy
 health: amber
-updated_at: 2026-08-26T14:20:00+08:00
+updated_at: 2026-08-31T12:09:00+08:00
 next_action_owner: Steven
 next_action: Short-window autopilot dry run this week (Steven's call D1-B), then the full-premise run before the weekly reset; announce after it passes (D2-A).
 blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do."]
