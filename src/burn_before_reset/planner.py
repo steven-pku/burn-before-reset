@@ -24,17 +24,27 @@ def _task_id(record: SourceRef) -> str:
     return "task-" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:12]
 
 
-# What each signal says about how much a resumed task is worth. A note that records
-# an unverified claim or an open decision is worth more of a closing window than one
-# that merely says TODO.
+# Calibrated against a real 3,110-record corpus rather than intuition, because the
+# first cut was wrong in a way only measurement showed: `unverified` had the top
+# weight while appearing in 27.7% of files — as common as `todo`, which had the
+# lowest. A marker that nearly every note carries says almost nothing about which
+# note is worth a night.
+#
+# Measured frequency: next-step 59.8% · fixme 37.9% · blocked 27.9% ·
+# unverified 27.7% · todo 27.5% · decision 8.1%.
+#
+# Weight = how rare the marker is (rare marker, real signal) plus one step when it
+# means something is *stuck* — a decision nobody made, a claim nobody checked, a
+# blocker nobody cleared. Stuck work is where an unattended night has leverage;
+# an unstarted TODO would still be unstarted whoever picked it up.
 SIGNAL_WEIGHT = {
-    "decision": 5,
-    "unverified": 5,
-    "git-dirty": 4,
-    "blocked": 4,
-    "fixme": 3,
-    "next-step": 3,
-    "todo": 2,
+    "decision": 5,     # 8.1% — rare and stuck
+    "git-dirty": 4,    # one per dirty repository, inherently rare
+    "unverified": 3,   # 27.7% — stuck, but common
+    "blocked": 3,      # 27.9% — stuck, but common
+    "todo": 2,         # 27.5% — common, not stuck
+    "fixme": 2,        # 37.9% — common, not stuck
+    "next-step": 1,    # 59.8% — nearly universal, says almost nothing
 }
 
 # Filenames that carry project state rather than a passing thought. Work recovered
@@ -109,11 +119,15 @@ def _task_from_record(record: SourceRef, run_dir: Path, now: datetime) -> TaskSp
     else:
         token_fitness = 2
     risk = 1 if is_git else 0
-    human = 2 if "decision" in signal_set else 0
+    # An open decision used to score 2 here and was therefore filtered out entirely
+    # by the default maximum of 1 — the rarest, highest-leverage signal in the corpus
+    # was the one category the tool systematically avoided. That discount assumed the
+    # task meant *making* the decision. The decision archetype does not: it frames the
+    # options and the evidence so the decision becomes cheap. That work completes
+    # unattended, so it costs one step for still needing a human to close it, not two.
+    human = 1 if "decision" in signal_set else 0
     task_id = _task_id(record)
-    action = "Audit and recover the unfinished work"
-    if is_git:
-        action = "Audit the repository state and propose a reviewable patch plan"
+    action, objective, validation = _archetype(signal_set)
     # A frontmatter title can collapse to a quote mark or a single word like
     # "config", which tells a morning reader nothing about which file it was.
     label = _clean_title(record.title)
@@ -125,19 +139,12 @@ def _task_from_record(record: SourceRef, run_dir: Path, now: datetime) -> TaskSp
     return TaskSpec(
         id=task_id,
         title=f"{action}: {label}",
-        objective=(
-            "Use only the cited source and allowed roots to determine the current state, "
-            "separate confirmed work from assumptions, and produce a bounded next-step artifact."
-        ),
+        objective=objective,
         source_refs=(record.to_dict(),),
         deliverables=(f"artifacts/{task_id}.md",),
         allowed_read_roots=(record.root,),
         allowed_write_root=str(run_dir),
-        validation=(
-            "artifact exists and is non-empty",
-            "artifact cites the source reference and separates confirmed facts from uncertainty",
-            "no source-root file is modified",
-        ),
+        validation=validation,
         strategic_value=strategic,
         reuse=reuse,
         readiness=readiness,
@@ -150,12 +157,105 @@ def _task_from_record(record: SourceRef, run_dir: Path, now: datetime) -> TaskSp
     )
 
 
+# What kind of work a finding deserves. Matching the strongest signal to a shaped
+# objective is the difference between "audit this file" for everything and an
+# artifact you can act on: a stuck decision needs its options laid out, an
+# unverified claim needs checking, a dirty repository needs a patch plan. The
+# order matters — the first match wins, strongest signal first.
+ARCHETYPES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
+    (
+        "decision",
+        "Frame the open decision so it can be made",
+        "Recover what decision is open, lay out the real options with the evidence for and "
+        "against each from the cited source only, name what information is still missing, and "
+        "state which option the evidence currently favours. Do not decide; make deciding cheap.",
+        (
+            "artifact names the decision and at least two genuine options",
+            "each option carries evidence cited to the source, or is marked unsupported",
+            "missing information is listed explicitly rather than filled in by assumption",
+        ),
+    ),
+    (
+        "unverified",
+        "Verify the unverified claim",
+        "Identify the claim that was recorded as unverified, check it against the cited source "
+        "and allowed roots, and report it as confirmed, refuted, or uncheckable-from-here. Where "
+        "uncheckable, state exactly what evidence would settle it.",
+        (
+            "each claim is labelled confirmed / refuted / uncheckable",
+            "every verdict cites the specific evidence it rests on",
+            "nothing is upgraded from uncheckable to confirmed by inference",
+        ),
+    ),
+    (
+        "git-dirty",
+        "Audit the repository state and propose a reviewable patch plan",
+        "Determine what the uncommitted work was trying to do, whether it is coherent, and what "
+        "a reviewer would need to finish or discard it. Produce a patch plan, not a patch.",
+        (
+            "plan separates work that looks finished from work that looks abandoned",
+            "each proposed step names the files it touches",
+            "no source-root file is modified",
+        ),
+    ),
+    (
+        "blocked",
+        "Analyse the blocker and find what can move",
+        "Establish precisely what is blocked and by what, distinguish blockers that need another "
+        "person from blockers that only need work, and identify what could proceed tonight despite "
+        "the block. Say plainly if nothing can.",
+        (
+            "the blocker is stated concretely, not restated from the note's own wording",
+            "blockers needing a human are separated from blockers needing work",
+            "artifact says what can proceed now, or states that nothing can",
+        ),
+    ),
+    (
+        "next-step",
+        "Recover the thread and make the next step executable",
+        "Reconstruct where this work actually stopped and why, then turn the recorded next step "
+        "into something executable: what exactly to do, against which files, and how the result "
+        "would be checked.",
+        (
+            "artifact states where the work stopped, with evidence",
+            "the next step is concrete enough to start without rereading the source",
+            "confirmed facts are separated from inference",
+        ),
+    ),
+)
+
+DEFAULT_ARCHETYPE = (
+    "Audit and recover the unfinished work",
+    "Use only the cited source and allowed roots to determine the current state, separate "
+    "confirmed work from assumptions, and produce a bounded next-step artifact.",
+    (
+        "artifact exists and is non-empty",
+        "artifact cites the source reference and separates confirmed facts from uncertainty",
+        "no source-root file is modified",
+    ),
+)
+
+
+def _archetype(signals: set[str]) -> tuple[str, str, tuple[str, ...]]:
+    for name, action, objective, validation in ARCHETYPES:
+        if name in signals:
+            return action, objective, validation
+    return DEFAULT_ARCHETYPE
+
+
 def _group_key(task: TaskSpec) -> str:
-    """The project a candidate belongs to, for queue diversity."""
+    """The bucket a candidate competes in, for queue diversity.
+
+    Both project and kind of work: one signal type can dominate a whole corpus —
+    Chinese project notes say 待验证 constantly — and a night that returns ten
+    verifications of ten different files is barely more useful than ten of one.
+    Bucketing by project *and* archetype spreads the window across both.
+    """
     reference = task.source_refs[0]
     relative = PurePosixPath(str(reference.get("path", ".")))
     parts = relative.parts
-    return f"{reference.get('root', '')}::{parts[0] if parts else '.'}"
+    kind = task.title.split(":", 1)[0]
+    return f"{reference.get('root', '')}::{parts[0] if parts else '.'}::{kind}"
 
 
 def _diversify(tasks: list[TaskSpec], limit: int) -> list[TaskSpec]:

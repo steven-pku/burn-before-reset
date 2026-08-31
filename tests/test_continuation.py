@@ -6,6 +6,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 from burn_before_reset.config import load_config
@@ -485,3 +486,68 @@ class BurnLedgerTests(unittest.TestCase):
             # A bad pick has to be traceable to the input that caused it.
             self.assertIn("Picked because", plan)
             self.assertIn("recency", plan)
+
+
+class ArchetypeTests(unittest.TestCase):
+    """What is found decides what gets produced; one generic objective wastes the night."""
+
+    def _task(self, signals, tmp):
+        from burn_before_reset.model import SourceRef
+        from burn_before_reset.planner import _task_from_record
+
+        record = SourceRef(
+            source_type="markdown", root="/r", path="p/note.md",
+            modified_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+            title="Note", signals=tuple(signals), snippets=("x",),
+        )
+        return _task_from_record(record, Path(tmp), datetime.now().astimezone())
+
+    def test_each_signal_kind_gets_its_own_objective_and_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            shapes = {
+                ("decision",): "decision",
+                ("unverified",): "verif",
+                ("blocked",): "block",
+                ("next-step",): "thread",
+                ("todo",): "unfinished work",
+            }
+            objectives, validations = set(), set()
+            for signals in shapes:
+                task = self._task(signals, tmp)
+                objectives.add(task.objective)
+                validations.add(task.validation[0])
+            self.assertEqual(len(objectives), len(shapes), "signals collapsed onto one objective")
+            self.assertEqual(len(validations), len(shapes), "signals collapsed onto one acceptance rule")
+
+    def test_an_open_decision_is_not_filtered_out(self) -> None:
+        # The rarest, highest-leverage signal used to score human_dependency 2 and be
+        # excluded by the default maximum of 1 — the tool avoided its best material.
+        with tempfile.TemporaryDirectory() as tmp:
+            task = self._task(("decision",), tmp)
+            self.assertLessEqual(task.human_dependency, 1)
+            self.assertIn("decision", task.objective.lower())
+
+    def test_a_near_universal_marker_outranks_nothing(self) -> None:
+        # next-step appears in 59.8% of a real corpus; it must not lift a candidate
+        # above one carrying a genuinely rare signal.
+        with tempfile.TemporaryDirectory() as tmp:
+            common = self._task(("next-step",), tmp)
+            rare = self._task(("decision",), tmp)
+            self.assertGreater(rare.strategic_value, common.strategic_value)
+
+    def test_queue_spreads_across_kinds_of_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            for project, marker in (("a", "TODO: x"), ("b", "blocked: y"), ("c", "待验证 z")):
+                folder = source / project
+                folder.mkdir(parents=True)
+                for index in range(4):
+                    (folder / f"n{index}.md").write_text(f"# {project}{index}\n\n{marker}\n", encoding="utf-8")
+            config = load_config(
+                write_config(root / "config.toml", source, root / "output", max_tasks=6)
+            )
+            run_dir = plan_run(config)
+            queue = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))
+            kinds = {t["title"].split(":", 1)[0] for t in queue["tasks"]}
+            self.assertGreaterEqual(len(kinds), 2, "the whole window went to one kind of work")
