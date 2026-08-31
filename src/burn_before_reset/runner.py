@@ -76,6 +76,54 @@ def _event(path: Path, event_type: str, **payload: Any) -> None:
         handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def _accumulate_burn(state: dict[str, Any], result: dict[str, Any]) -> None:
+    """Roll one call's consumption into the run total.
+
+    This is the run's only measure of how much of the expiring allowance has
+    actually been converted into work. Time is the ceiling; burn is the progress.
+    """
+    burn = result.get("burn") or {}
+    total = state.setdefault(
+        "burn", {"cost_usd": 0.0, "cost_known_calls": 0, "input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0}
+    )
+    cost = burn.get("cost_usd")
+    if isinstance(cost, (int, float)):
+        total["cost_usd"] = round(float(total.get("cost_usd", 0.0)) + float(cost), 6)
+        total["cost_known_calls"] = int(total.get("cost_known_calls", 0)) + 1
+    for key in ("input_tokens", "output_tokens", "cached_input_tokens"):
+        value = burn.get(key)
+        if isinstance(value, int):
+            total[key] = int(total.get(key, 0)) + value
+
+
+def _burn_pace(config: AppConfig, state: dict[str, Any]) -> dict[str, Any]:
+    """Spent so far, and what that rate projects to at the hard stop.
+
+    Under-burning with hours left is a failure of the tool, not a safe outcome:
+    the allowance expires either way. The projection makes that visible while
+    there is still time to widen the queue.
+    """
+    started = state.get("created_at")
+    now = datetime.now(tz=config.run.reset_at.tzinfo)
+    total = state.get("burn") or {}
+    spent = float(total.get("cost_usd", 0.0) or 0.0)
+    try:
+        elapsed_h = max((now - datetime.fromisoformat(str(started))).total_seconds() / 3600, 1e-6)
+    except (TypeError, ValueError):
+        elapsed_h = 1e-6
+    remaining_h = max((config.run.hard_stop_at - now).total_seconds() / 3600, 0.0)
+    rate = spent / elapsed_h
+    return {
+        "spent_usd": round(spent, 4),
+        "rate_usd_per_hour": round(rate, 4),
+        "hours_elapsed": round(elapsed_h, 2),
+        "hours_remaining": round(remaining_h, 2),
+        "projected_total_usd": round(spent + rate * remaining_h, 4),
+        "output_tokens": int(total.get("output_tokens", 0)),
+        "calls": int(state.get("worker_calls", 0)),
+    }
+
+
 def _failure_stop_reason(result: dict[str, Any]) -> str:
     if _stop_requested:
         # The operator asked us to stop mid-task. The worker did not fail;
@@ -199,6 +247,7 @@ def _work_queue(
                     "worker_errors": [],
                     "billing_error": False,
                     "quota_exhausted": False,
+                    "burn": {"cost_usd": None, "input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0},
                     "deadline_stop": (run_dir / "STOP_NOW").exists(),
                     "artifact": None,
                     "started_at": now.astimezone().isoformat(timespec="seconds"),
@@ -214,6 +263,7 @@ def _work_queue(
                     "error_message": " ".join(str(exc).split())[:300],
                 }
             state.setdefault("task_results", {})[task_id] = result
+            _accumulate_burn(state, result)
             reported_errors = result.get("worker_errors") or []
             if reported_errors:
                 state.setdefault("worker_errors", []).extend(reported_errors)
@@ -345,6 +395,7 @@ def execute_run(config: AppConfig, run_dir: Path, entry_script: Path) -> dict[st
     except StopRequested:
         stop_reason = "operator_stop"
 
+    state["burn_pace"] = _burn_pace(config, state)
     state["phase"] = "stopped"
     for task_id, status in list(state.get("task_status", {}).items()):
         if status in ("running", "waiting_quota"):

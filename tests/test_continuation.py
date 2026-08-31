@@ -390,3 +390,98 @@ class AuditFixTests(unittest.TestCase):
             state["rounds"][0]["tasks_sha256"] = "0" * 64
             state_path.write_text(json.dumps(state), encoding="utf-8")
             self.assertTrue(any("round ledger hash" in e for e in validate_run(run_dir)))
+
+
+class BurnLedgerTests(unittest.TestCase):
+    """The provider's allowance is unreadable; what was spent is the only progress measure."""
+
+    def test_claude_cost_and_tokens_are_accumulated(self) -> None:
+        from burn_before_reset.worker import _burn_from_events
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "events.jsonl"
+            path.write_text(
+                json.dumps(
+                    {
+                        "subtype": "success",
+                        "is_error": False,
+                        "result": "x",
+                        "total_cost_usd": 0.25,
+                        "usage": {"input_tokens": 10, "output_tokens": 500, "cache_read_input_tokens": 900},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            burn = _burn_from_events(path, "claude")
+            self.assertAlmostEqual(burn["cost_usd"], 0.25)
+            self.assertEqual(burn["output_tokens"], 500)
+            self.assertEqual(burn["cached_input_tokens"], 900)
+
+    def test_codex_reports_tokens_without_inventing_a_price(self) -> None:
+        from burn_before_reset.worker import _burn_from_events
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "events.jsonl"
+            path.write_text(
+                json.dumps({"type": "turn.completed", "usage": {"input_tokens": 20, "output_tokens": 7}}) + "\n",
+                encoding="utf-8",
+            )
+            burn = _burn_from_events(path, "codex")
+            self.assertIsNone(burn["cost_usd"], "a price must never be invented for a provider that reports none")
+            self.assertEqual(burn["output_tokens"], 7)
+
+    def test_run_reports_spend_and_unused_window(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# Work\n\nTODO: verify this.\n", encoding="utf-8")
+            fake = Path(root / "fake-codex")
+            fake.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"# Done\"}}'\n"
+                "printf '%s\\n' '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":11,\"output_tokens\":22}}'\n",
+                encoding="utf-8",
+            )
+            fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+            config = load_config(
+                write_config(root / "config.toml", source, root / "output", enabled=True, codex_binary=str(fake))
+            )
+            run_dir = plan_run(config)
+            state = execute_run(config, run_dir, _entry_script())
+            self.assertEqual(state["burn"]["output_tokens"], 22)
+            self.assertIn("hours_remaining", state["burn_pace"])
+            report = (run_dir / "MORNING_REPORT.md").read_text(encoding="utf-8")
+            self.assertIn("## Burn", report)
+            # The window closed with hours unused: that is unconverted quota and
+            # the report must say so rather than presenting it as a clean finish.
+            self.assertIn("left unused", report)
+            self.assertIn("Was this worth the quota?", report)
+
+    def test_burn_command_reads_a_finished_run(self) -> None:
+        from burn_before_reset.burn import burn_report
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# Work\n\nTODO: verify.\n", encoding="utf-8")
+            config = load_config(write_config(root / "config.toml", source, root / "output"))
+            run_dir = plan_run(config)
+            text = burn_report(run_dir)
+            self.assertIn(run_dir.name, text)
+            self.assertIn("remaining", text)
+            self.assertIn("nothing has been dispatched yet", text)
+
+    def test_run_plan_records_why_each_task_was_picked(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# Work\n\nTODO: verify.\nblocked: waiting.\n", encoding="utf-8")
+            config = load_config(write_config(root / "config.toml", source, root / "output"))
+            run_dir = plan_run(config)
+            plan = (run_dir / "RUN_PLAN.md").read_text(encoding="utf-8")
+            # A bad pick has to be traceable to the input that caused it.
+            self.assertIn("Picked because", plan)
+            self.assertIn("recency", plan)

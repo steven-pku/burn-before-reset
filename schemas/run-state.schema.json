@@ -22,6 +22,7 @@
     "billing_error_detected",
     "quota_exhausted",
     "quota_wait_cycles",
+    "burn",
     "worker_calls",
     "rounds",
     "guard_failure_detected",
@@ -109,6 +110,14 @@
       "type": "integer",
       "minimum": 0,
       "description": "Times the supervisor slept waiting for the inner allowance to replenish."
+    },
+    "burn": {
+      "type": "object",
+      "description": "Cumulative consumption across every worker call: the only local measure of how much expiring allowance was actually converted into work."
+    },
+    "burn_pace": {
+      "type": "object",
+      "description": "Spend rate and its projection at the hard stop; under-burning with hours left is a failure to convert, not a safe outcome."
     },
     "worker_calls": {
       "type": "integer",

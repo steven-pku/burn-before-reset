@@ -448,6 +448,48 @@ def _diagnostic_scan(events_path: Path) -> tuple[str, list[str]]:
     return "\n".join(diagnostics), errors
 
 
+def _burn_from_events(events_path: Path, provider: str) -> dict[str, Any]:
+    """What this one worker call actually consumed.
+
+    The provider's remaining allowance is not readable from here — the only
+    honest measure of progress is what has been spent, accumulated locally from
+    each call's own receipt. Claude reports a cost; Codex reports tokens only,
+    so cost stays None there rather than being invented from a stale price.
+    """
+    burn: dict[str, Any] = {"cost_usd": None, "input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0}
+    def _absorb(usage: Any) -> None:
+        if not isinstance(usage, dict):
+            return
+        for key, field in (
+            ("input_tokens", "input_tokens"),
+            ("output_tokens", "output_tokens"),
+            ("cached_input_tokens", "cached_input_tokens"),
+            ("cache_read_input_tokens", "cached_input_tokens"),
+        ):
+            value = usage.get(key)
+            if isinstance(value, int):
+                burn[field] += value
+    if provider == "claude":
+        payload = _claude_result(events_path)
+        cost = payload.get("total_cost_usd")
+        if isinstance(cost, (int, float)):
+            burn["cost_usd"] = float(cost)
+        _absorb(payload.get("usage"))
+        return burn
+    try:
+        lines = events_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return burn
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "turn.completed":
+            _absorb(event.get("usage"))
+    return burn
+
+
 def _contains_billing_error(text: str) -> bool:
     lowered = text.lower()
     return any(term in lowered for term in BILLING_ERROR_TERMS)
@@ -626,6 +668,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
                 "worker_errors": [],
                 "billing_error": False,
                 "quota_exhausted": False,
+                "burn": {"cost_usd": None, "input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0},
                 "deadline_stop": False,
                 "artifact": None,
                 "started_at": started_at.isoformat(timespec="seconds"),
@@ -671,6 +714,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
         permission_denied = bool(_claude_result(events_path).get("permission_denials"))
     else:
         diagnostic_text, worker_errors = _diagnostic_scan(events_path)
+    burn = _burn_from_events(events_path, config.execution.provider)
     scanned = stderr_text + "\n" + diagnostic_text
     billing_error = _contains_billing_error(scanned)
     quota_exhausted = _contains_quota_exhaustion(scanned)
@@ -708,6 +752,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
         "worker_errors": worker_errors[:MAX_REPORTED_WORKER_ERRORS],
         "billing_error": billing_error,
         "quota_exhausted": quota_exhausted,
+        "burn": burn,
         "deadline_stop": stop_now,
         "artifact": str(artifact_path.relative_to(run_dir)) if success else None,
         "started_at": started_at.isoformat(timespec="seconds"),

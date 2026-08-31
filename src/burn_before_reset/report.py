@@ -19,12 +19,38 @@ def write_morning_report(run_dir: Path, state: dict[str, Any], queue: dict[str, 
         f"- Stop reason: {state.get('stop_reason') or 'unknown'}",
         f"- Planning rounds: {len(state.get('rounds', [])) or 1}",
         f"- Quota replenishment waits: {int(state.get('quota_wait_cycles', 0))}",
-        f"- Worker calls: {int(state.get('worker_calls', 0))}",
+        "",
+        "## Burn",
+        "",
+    ]
+    pace = state.get("burn_pace") or {}
+    burn = state.get("burn") or {}
+    calls = int(state.get("worker_calls", 0))
+    if calls:
+        priced = int(burn.get("cost_known_calls", 0))
+        spent = pace.get("spent_usd", 0.0)
+        spent_line = f"- Spent: ${spent:.4f}" if priced else "- Spent: not priced by this provider (tokens only)"
+        if priced and priced < calls:
+            spent_line += f" — priced on {priced} of {calls} calls"
+        lines.append(spent_line)
+        lines.append(f"- Output tokens: {int(pace.get('output_tokens', 0)):,} across {calls} worker calls")
+        if priced:
+            lines.append(
+                f"- Rate: ${pace.get('rate_usd_per_hour', 0):.3f}/hour over {pace.get('hours_elapsed', 0)}h"
+            )
+        left = float(pace.get("hours_remaining", 0) or 0)
+        if left > 0.5:
+            # Time left on the clock at the moment the run stopped. The allowance
+            # expires either way, so unused hours are unconverted quota, not safety.
+            lines.append(f"- **{left:.1f}h of the window were left unused** — see the stop reason above for why")
+    else:
+        lines.append("- No worker call completed, so nothing was spent.")
+    lines.extend([
         f"- First queue hash: `{state['queue_sha256']}` (later rounds carry their own, see RUN_STATE rounds)",
         "",
         "## Completed",
         "",
-    ]
+    ])
     completed = set(state.get("completed", []))
     failed = set(state.get("failed", []))
     task_by_id = {task["id"]: task for task in queue.get("tasks", [])}
@@ -84,6 +110,22 @@ def write_morning_report(run_dir: Path, state: dict[str, Any], queue: dict[str, 
         )
     lines.extend(
         [
+            "",
+            "## Was this worth the quota?",
+            "",
+            "The runner ranks candidates by how *live* they look — signal type, how recently",
+            "the source changed, evidence density. That is a proxy for value, not value itself:",
+            "nothing here knows which of your projects actually matters. Grading the picks is",
+            "the only way that gap closes.",
+            "",
+            "For each artifact above, mark one:",
+            "",
+            "- **worth it** — you would have wanted this done",
+            "- **fine but low value** — correct work on something that did not matter",
+            "- **wrong pick** — the window should have gone elsewhere; say where",
+            "",
+            "The selection reasons are in `RUN_PLAN.md` under each task, so a bad pick can be",
+            "traced to the scoring input that caused it.",
             "",
             "## Human review",
             "",

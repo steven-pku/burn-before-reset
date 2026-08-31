@@ -217,13 +217,17 @@ def _run_plan(config: AppConfig, run_dir: Path, records: list[SourceRef], tasks:
     if not tasks:
         lines.append("No eligible task. Stop instead of inventing work.")
     for index, task in enumerate(tasks, 1):
+        reference = task["source_refs"][0]
+        signals = ", ".join(reference.get("signals", [])) or "none"
         lines.extend(
             [
                 f"### {index}. {task['title']}",
                 "",
-                f"- ID: `{task['id']}`",
-                f"- Score: {task['score']}",
-                f"- Risk: {task['risk']}",
+                f"- ID: `{task['id']}` · score {task['score']} · risk {task['risk']}",
+                f"- Source: `{reference.get('path')}` (last changed {reference.get('modified_at')})",
+                f"- Picked because: signals [{signals}] · "
+                f"strategic {task['strategic_value']} · recency {task['recency']} · "
+                f"evidence {task['readiness']} · reuse {task['reuse']}",
                 f"- Deliverable: `{task['deliverables'][0]}`",
                 "",
             ]
@@ -318,6 +322,7 @@ def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
         "billing_error_detected": False,
         "quota_exhausted": False,
         "quota_wait_cycles": 0,
+        "burn": {"cost_usd": 0.0, "cost_known_calls": 0, "input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0},
         "worker_calls": 0,
         "rounds": [{"queue": "QUEUE.json", "tasks_sha256": queue["tasks_sha256"]}],
         "guard_failure_detected": False,

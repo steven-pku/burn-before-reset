@@ -13,6 +13,7 @@
     "worker_errors",
     "billing_error",
     "quota_exhausted",
+    "burn",
     "deadline_stop",
     "guard_ready",
     "guard_failed",
@@ -63,6 +64,27 @@
     "quota_exhausted": {
       "type": "boolean",
       "description": "The subscription allowance ran out. An ordinary end of a window, not a billing fault."
+    },
+    "burn": {
+      "type": "object",
+      "description": "What this one worker call consumed: cost where the provider reports it, tokens always.",
+      "properties": {
+        "cost_usd": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "input_tokens": {
+          "type": "integer"
+        },
+        "output_tokens": {
+          "type": "integer"
+        },
+        "cached_input_tokens": {
+          "type": "integer"
+        }
+      }
     },
     "deadline_stop": {
       "type": "boolean"

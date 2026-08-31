@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from .burn import burn_report
 from .config import ConfigError, assert_execution_environment, load_config
 from .deadline import guard_process
 from .discover import discover_sources, render_proposals
@@ -33,6 +34,10 @@ def _parser() -> argparse.ArgumentParser:
 
     validate = subparsers.add_parser("validate-run")
     validate.add_argument("--run-dir", required=True, type=Path)
+
+    burn = subparsers.add_parser("burn")
+    burn.add_argument("--run-dir", type=Path)
+    burn.add_argument("--output-root", type=Path)
 
     discover = subparsers.add_parser("discover")
     discover.add_argument("--home", type=Path, default=None)
@@ -95,6 +100,9 @@ def main(argv: list[str] | None = None) -> int:
             state = execute_run(config, run_dir, entry_script)
             print(json.dumps({"run_dir": str(run_dir), "stop_reason": state["stop_reason"]}, indent=2))
             return 0 if state.get("stop_reason") == "queue_exhausted" and not state.get("failed") else 1
+        if args.command == "burn":
+            print(burn_report(args.run_dir, args.output_root), end="")
+            return 0
         if args.command == "discover":
             print(render_proposals(discover_sources(args.home)), end="")
             return 0
