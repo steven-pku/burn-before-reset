@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/steven-pku/burn-before-reset/blob/main/SECURITY.md
+    about: Anything that could let a run act outside its allowlist or spend money — read SECURITY.md first, do not open a public issue.

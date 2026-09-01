@@ -16,7 +16,15 @@ It indexes only sources you explicitly allow, builds a traceable candidate list,
 
 The demo above is generated from [assets/demo.tape](assets/demo.tape) with [vhs](https://github.com/charmbracelet/vhs) — plan-only, against throwaway demo sources.
 
-**Contents**: [Status](#current-status) · [Safety model](#safety-model) · [Quick start](#quick-start) · [Exit codes](#exit-codes) · [What v0.2 does](#what-v02-does) · [What it does not do](#what-it-does-not-do) · [Layout](#repository-layout) · [Agents](#which-agents-can-run-this) · [License](#license)
+## What you wake up to
+
+One page, generated from the run's own receipts — never written by the agent. It opens with a verdict on what was delivered, groups the work by kind, and lets you queue any artifact for your agent with a copy-paste handoff brief.
+
+<img alt="REPORT.html: proverb verdict, work grouped by kind, fact tiles, and a handoff action" src="assets/report.png" width="900" />
+
+The page is self-contained (no network requests), speaks the user's language (`run.report_language`), and renders a failed night as carefully as a good one. The Markdown twin, `MORNING_REPORT.md`, is what the agent reads back.
+
+**Contents**: [Status](#current-status) · [Safety model](#safety-model) · [Quick start](#quick-start) · [Exit codes](#exit-codes) · [What it does](#what-it-does) · [What it does not do](#what-it-does-not-do) · [Layout](#repository-layout) · [Agents](#which-agents-can-run-this) · [License](#license)
 
 ## Current status
 
@@ -80,9 +88,11 @@ The command still refuses unless `execution.enabled = true` and every safety ass
 
 A `1` from a deadline stop means "ran out of time as designed", so treat it as an incomplete run rather than a fault, and read `MORNING_REPORT.md` — or open `REPORT.html`, the same night as a page — before deciding.
 
-## What v0.2 does
+## What it does
 
 - One up-front mode question — review the plan, or full autopilot — then hands-off.
+- A user-facing `REPORT.html` beside the Markdown report: fixed-format, deterministic, bilingual, with a handoff brief for the artifacts you want continued.
+- Cross-run de-duplication: work an earlier run already finished is skipped until its source moves, and every skip is named in `RUN_PLAN.md`.
 - Source discovery without a note vault: `bbr discover` proposes session-log,
   repository, and document roots by recent activity, read-only.
 - Riding inner allowance windows: on `usage limit`, the supervisor sleeps and retries

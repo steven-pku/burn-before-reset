@@ -10,6 +10,55 @@ record of what has actually been proven.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-02
+
+### Added
+
+- `REPORT.html`: the user's page, generated deterministically beside the Markdown
+  report (`report_html.py`, `bbr report --run-dir … [--language]`). A fixed-format
+  opening; a proverb verdict chosen from **what was delivered**, never from how much
+  was burned; a validated categorical palette with a stroke icon per kind of work;
+  "queue for my agent" → copy a handoff brief as the primary action, grading as
+  optional feedback. Self-contained, no network requests, light and dark.
+- `run.report_language` (the page speaks the user's language; en/zh built in,
+  everything else falls back to English) and `run.output_language` (artifacts follow
+  the sources they were read from, or a forced language).
+- Cross-run de-duplication: `prior_completions()` skips candidates an earlier run
+  in the same `output_root` already answered, until their source moves. Skips are
+  counted in `reused_from_prior_runs` and named in `RUN_PLAN.md`.
+- Stop reason `worker_reported_error` for a provider refusal the term lists cannot
+  classify; the message reaches the report verbatim.
+- Task-result fields `source_write_attributable` and run-state
+  `source_movement_observed`, separating "a file moved" from "the worker moved it".
+- Adaptation matrix `tests/test_report_html.py`: every stop reason × language,
+  every archetype as dominant, ties, empty and sixty-artifact runs, truncation,
+  missing files, hostile markup, non-Latin text, unsupported languages, determinism.
+
+### Fixed
+
+- Quota exhaustion misread as malformed worker output: the refusal was stated only
+  in the `result` text, which diagnostics excluded as "the deliverable"; errored
+  results now enter diagnostics, and the term list covers "spend limit" /
+  "weekly limit" wordings (A15).
+- A read-only worker was blamed for allowlisted files that moved (another agent
+  appending to its own session log, a sync client); attribution now follows write
+  capability (A16).
+- A run that died made the next run redo its finished work — 7 of 27 artifacts in
+  the first overnight run were repeats (A17).
+- `report_language = "日本語"` selected the Chinese dictionary (A18); the report's JSON
+  payload escaped only `</` (A19).
+- SKILL.md said four up-front items were required; three are (item 4 has a safe
+  default), and the closing paragraph already said so.
+
+### Changed
+
+- Morning Report wording: "no source write was attributable to the worker" replaces
+  "source snapshot remained unchanged"; a new line separates attributed writes from
+  observed movement.
+- README exit-code table names `quota_exhausted` as a designed stop and documents
+  `worker_reported_error`.
+
+
 ### Added
 
 - `execution.max_worker_calls_per_run`: an absolute per-run cap on worker
@@ -119,6 +168,7 @@ pilot are dated 2026-08-24 in `STATUS.md`.
   index.
 
 <!-- v0.1.0 has no git tag; it is the initial import commit 0fdd27e. Retag at release if wanted. -->
-[Unreleased]: https://github.com/steven-pku/burn-before-reset/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/steven-pku/burn-before-reset/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/steven-pku/burn-before-reset/compare/0fdd27e...v0.2.0
 [0.1.0]: https://github.com/steven-pku/burn-before-reset/commit/0fdd27e

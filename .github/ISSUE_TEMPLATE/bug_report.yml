@@ -1,0 +1,40 @@
+name: Bug report
+description: Something the runner, the Skill, or the report did wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: What happened
+      description: What you saw. Paste `STOP_REASON` and the relevant lines of `events.jsonl` if a run was involved.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Worker provider and mode
+      placeholder: claude / safe · codex / balanced
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: burn-before-reset 0.3.0 · Python 3.12 · claude 2.x / codex x.y
+  - type: textarea
+    id: config
+    attributes:
+      label: Config (redacted)
+      description: Your `[run]` and `[execution]` tables with paths replaced. Never paste keys or tokens.
+      render: toml
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: This report does not describe a way for a run to act outside its allowlist or spend money it should not (those go to SECURITY.md, not a public issue).
+          required: true

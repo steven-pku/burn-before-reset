@@ -205,7 +205,8 @@ CHROME: dict[str, dict[str, Any]] = {
         },
         "first_action": "First: {n} {name} — {hint}",
         "exc_failed": "Failed {n}",
-        "exc_waits": "allowance closed {n} time(s) mid-run",
+        "exc_waits": "allowance closed {n} times mid-run",
+        "exc_waits_one": "allowance closed once mid-run",
         "handoff_add": "Queue for my agent",
         "handoff_added": "Queued for my agent",
         "handoff_copy": "Copy handoff brief",
@@ -277,6 +278,7 @@ CHROME: dict[str, dict[str, Any]] = {
         "first_action": "先看：{n} 个{name}——{hint}",
         "exc_failed": "失败 {n}",
         "exc_waits": "中途额度关闭 {n} 次",
+        "exc_waits_one": "中途额度关闭 1 次",
         "handoff_add": "交办给我的 agent",
         "handoff_added": "已交办给我的 agent",
         "handoff_copy": "复制交办清单",
@@ -995,7 +997,9 @@ def _fixed_lines(state: dict[str, Any], items: list[dict[str, Any]], chrome: dic
     parts = []
     if failed:
         parts.append(chrome["exc_failed"].format(n=failed))
-    if waits:
+    if waits == 1:
+        parts.append(chrome["exc_waits_one"])
+    elif waits:
         parts.append(chrome["exc_waits"].format(n=waits))
     if parts:
         out.append(
@@ -1245,6 +1249,11 @@ def write_html_report(run_dir: Path, state: dict[str, Any], *, language: str = "
         "<!doctype html>\n"
         f'<html lang="{lang}"><head><meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        # Inline favicon: the brand flame, no request. Without it every browser logs a 404.
+        '<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E'
+        '%3Crect width=%2724%27 height=%2724%27 rx=%276%27 fill=%27%23eb6834%27/%3E'
+        '%3Cpath d=%27M12 20c3.3 0 5.3-2.2 5.3-5.3 0-2.6-1.9-4.1-2.6-5.6-.4 1.1-1.1 1.9-1.9 2.3-.2-1.9-1.1-3.8-3-5.3-.4 3-3 4.5-3 8.3 0 3.1 2 5.6 5.2 5.6z%27 '
+        'fill=%27none%27 stroke=%27%23fff%27 stroke-width=%272%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">\n'
         f"<title>{_esc(chrome['doc_title'])} · {_esc(state.get('run_id', run_dir.name))}</title>\n"
         f"<style>{CSS}</style></head><body>\n"
         + _band(state)

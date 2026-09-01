@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "burn-before-reset"
-version = "0.2.0"
+version = "0.3.0"
 description = "Turn expiring local AI quota into bounded, reviewable work before reset."
 requires-python = ">=3.11"
 license = { text = "MIT" }
