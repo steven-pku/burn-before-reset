@@ -75,10 +75,10 @@ The command still refuses unless `execution.enabled = true` and every safety ass
 | Code | Meaning |
 |---|---|
 | `0` | The queue was exhausted with no failed task. This is the only success. |
-| `1` | The run stopped early. Read `STOP_REASON`: `deadline_guard` and `drain_window` are correct, designed stops with work left over; `billing_or_auth_error`, `source_mutation_detected`, `guard_failure`, and `stop_unconfirmed` are not. |
+| `1` | The run stopped early. Read `STOP_REASON`: `deadline_guard`, `drain_window`, and `quota_exhausted` are correct, designed stops; `billing_or_auth_error`, `source_mutation_detected`, `guard_failure`, and `stop_unconfirmed` are not. `worker_reported_error` means the provider refused in words this tool could not classify — its message is in the Morning Report. |
 | `2` | The command refused before doing anything: a gate failed, the config was rejected, or `--execute` was missing. |
 
-A `1` from a deadline stop means "ran out of time as designed", so treat it as an incomplete run rather than a fault, and read `MORNING_REPORT.md` before deciding.
+A `1` from a deadline stop means "ran out of time as designed", so treat it as an incomplete run rather than a fault, and read `MORNING_REPORT.md` — or open `REPORT.html`, the same night as a page — before deciding.
 
 ## What v0.2 does
 

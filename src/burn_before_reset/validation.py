@@ -28,6 +28,7 @@ KNOWN_STOP_REASONS = frozenset(
         "descendant_cleanup_required",
         "guard_failure",
         "invalid_worker_output",
+        "worker_reported_error",
         "worker_exception",
         "stop_unconfirmed",
         "worker_failed",

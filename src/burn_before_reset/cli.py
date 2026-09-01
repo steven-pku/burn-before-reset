@@ -15,6 +15,7 @@ from .config import ConfigError, assert_execution_environment, load_config
 from .deadline import guard_process
 from .discover import discover_sources, render_proposals
 from .planner import plan_run
+from .report_html import generate_report
 from .runner import execute_run, install_supervisor_signals
 from .validation import validate_run
 
@@ -38,6 +39,10 @@ def _parser() -> argparse.ArgumentParser:
     burn = subparsers.add_parser("burn")
     burn.add_argument("--run-dir", type=Path)
     burn.add_argument("--output-root", type=Path)
+
+    report = subparsers.add_parser("report")
+    report.add_argument("--run-dir", required=True, type=Path)
+    report.add_argument("--language", default="auto")
 
     discover = subparsers.add_parser("discover")
     discover.add_argument("--home", type=Path, default=None)
@@ -102,6 +107,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if state.get("stop_reason") == "queue_exhausted" and not state.get("failed") else 1
         if args.command == "burn":
             print(burn_report(args.run_dir, args.output_root), end="")
+            return 0
+        if args.command == "report":
+            print(generate_report(args.run_dir.resolve(), args.language))
             return 0
         if args.command == "discover":
             print(render_proposals(discover_sources(args.home)), end="")

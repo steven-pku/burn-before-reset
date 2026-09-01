@@ -63,7 +63,8 @@ def write_morning_report(run_dir: Path, state: dict[str, Any], queue: dict[str, 
                 f"### {task['title']}",
                 "",
                 f"- Artifact: `{task['deliverables'][0]}`",
-                "- Validation: worker completed, artifact exists, and source snapshot remained unchanged.",
+                "- Validation: worker completed, artifact exists, no tool was refused, and no "
+                "source write was attributable to the worker.",
                 "",
             ]
         )
@@ -78,7 +79,10 @@ def write_morning_report(run_dir: Path, state: dict[str, Any], queue: dict[str, 
             "",
             "## Safety record",
             "",
-            "- Source mutations detected: " + ("yes" if state.get("source_mutation_detected") else "no"),
+            "- Source writes attributed to the Worker: "
+            + ("yes" if state.get("source_mutation_detected") else "no"),
+            "- Allowlisted files that moved during the run: "
+            + ("yes — listed below" if state.get("source_movement_observed") else "no"),
             "- Source mutation check incomplete: " + ("yes" if state.get("source_check_incomplete") else "no"),
             "- Billing/auth error detected: " + ("yes" if state.get("billing_error_detected") else "no"),
             "- Deadline guard failure detected: " + ("yes" if state.get("guard_failure_detected") else "no"),
@@ -91,14 +95,27 @@ def write_morning_report(run_dir: Path, state: dict[str, Any], queue: dict[str, 
     if changed_paths:
         lines.extend(["", "### Allowlisted paths that moved during the run", ""])
         lines.extend(f"- `{path}`" for path in changed_paths)
-        lines.extend(
-            [
-                "",
-                "Check each one before treating this as a boundary violation. A background "
-                "sync client touching an indexed file leaves the same trace as the Worker "
-                "writing to it.",
-            ]
-        )
+        attributed = bool(state.get("source_mutation_detected"))
+        if attributed:
+            lines.extend(
+                [
+                    "",
+                    "This Worker had write capability, so these are attributed to it and the "
+                    "run stopped. Treat them as a boundary violation until each one is "
+                    "explained.",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "",
+                    "The Worker held no tool that writes — a Claude worker gets Read, Grep "
+                    "and Glob only; a Codex worker in safe mode runs read-only — so it "
+                    "cannot be the cause and the run continued. Something else on the "
+                    "machine wrote these: another agent session appending to its own "
+                    "transcript, a sync client, or you. Worth a glance, not an alarm.",
+                ]
+            )
     worker_errors = state.get("worker_errors") or []
     if worker_errors:
         lines.extend(["", "### Errors reported by the Worker", ""])

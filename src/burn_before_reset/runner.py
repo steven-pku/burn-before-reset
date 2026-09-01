@@ -10,6 +10,7 @@ from typing import Any
 from .config import AppConfig
 from .planner import plan_followup_round
 from .report import write_morning_report
+from .report_html import write_html_report
 from .state import (
     read_json,
     validate_frozen_queue,
@@ -134,7 +135,8 @@ def _failure_stop_reason(result: dict[str, Any]) -> str:
     if result.get("quota_exhausted"):
         # The allowance ran out. That is the window closing, not a fault.
         return "quota_exhausted"
-    if result["source_changed"]:
+    if result.get("source_write_attributable"):
+        # Only a worker that could actually write gets blamed for a file moving.
         return "source_mutation_detected"
     if result["deadline_stop"]:
         return "deadline_guard"
@@ -144,6 +146,10 @@ def _failure_stop_reason(result: dict[str, Any]) -> str:
         return "descendant_cleanup_required"
     if result.get("guard_failed"):
         return "guard_failure"
+    if result.get("error_type") == "WorkerReportedError":
+        # The provider said no in words this code did not recognise. Name it for what
+        # it is; the message itself is in the Morning Report's worker errors.
+        return "worker_reported_error"
     if result.get("error_type") == "NoFinalMessage":
         return "invalid_worker_output"
     if result.get("error_type"):
@@ -243,6 +249,7 @@ def _work_queue(
                     "return_code": -1,
                     "timed_out": False,
                     "source_changed": False,
+                    "source_write_attributable": False,
                     "source_changed_paths": [],
                     "worker_errors": [],
                     "billing_error": False,
@@ -267,6 +274,15 @@ def _work_queue(
             reported_errors = result.get("worker_errors") or []
             if reported_errors:
                 state.setdefault("worker_errors", []).extend(reported_errors)
+            # Movement is recorded whether or not it failed the task, and whether or
+            # not the task succeeded. A run that quietly dropped these paths on its
+            # successful tasks would report a clean night over an unread signal.
+            if result.get("source_changed"):
+                state["source_movement_observed"] = True
+                seen = state.setdefault("source_changed_paths", [])
+                for path in result.get("source_changed_paths") or []:
+                    if path not in seen:
+                        seen.append(path)
 
             if result["success"]:
                 state["task_status"][task_id] = "completed"
@@ -281,7 +297,7 @@ def _work_queue(
                 and config.run.wait_for_replenish
                 and not _stop_requested
                 and not result["billing_error"]
-                and not result["source_changed"]
+                and not result.get("source_write_attributable")
                 and not result["deadline_stop"]
                 and not result["timed_out"]
                 and not result.get("guard_failed")
@@ -312,8 +328,7 @@ def _work_queue(
                 task_id=task_id,
                 error_type=result.get("error_type"),
             )
-            state["source_mutation_detected"] = bool(result["source_changed"])
-            state["source_changed_paths"] = list(result.get("source_changed_paths") or [])
+            state["source_mutation_detected"] = bool(result.get("source_write_attributable"))
             state["billing_error_detected"] = bool(result["billing_error"])
             state["quota_exhausted"] = bool(result.get("quota_exhausted"))
             state["source_check_incomplete"] = not bool(result.get("source_check_completed"))
@@ -411,4 +426,10 @@ def execute_run(config: AppConfig, run_dir: Path, entry_script: Path) -> dict[st
         write_text_atomic(run_dir / "STOP_REASON", stop_reason + "\n")
     write_morning_report(run_dir, state, {"tasks": all_tasks})
     _event(run_dir / "events.jsonl", "run.stopped", stop_reason=stop_reason)
+    # The user's page. The Markdown twin above is the contract the agent reads back;
+    # this one must never be the reason a finished run fails to finalise.
+    try:
+        write_html_report(run_dir, state, language=config.run.report_language)
+    except Exception as exc:  # noqa: BLE001 — receipts are already on disk
+        _event(run_dir / "events.jsonl", "report.html_failed", error=" ".join(str(exc).split())[:300])
     return state

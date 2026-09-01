@@ -43,6 +43,8 @@ class RunSettings:
     wait_for_replenish: bool
     quota_replenish_probe_minutes: float
     replan_when_queue_empty: bool
+    output_language: str
+    report_language: str
 
 
 @dataclass(frozen=True)
@@ -192,6 +194,24 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
     replan_when_queue_empty = run_data.get("replan_when_queue_empty", True)
     if not isinstance(replan_when_queue_empty, bool):
         raise ConfigError("run.replan_when_queue_empty must be true or false")
+    # This tool is written in English; the work it reads usually is not. Left alone the
+    # worker answers in the prompt's language, which hands a Chinese-language project a
+    # night of English reports its owner has to translate before they can even triage.
+    # "auto" makes the artifact follow the language of the sources actually read.
+    output_language = run_data.get("output_language", "auto")
+    if not isinstance(output_language, str) or not output_language.strip():
+        raise ConfigError("run.output_language must be a non-empty string")
+    output_language = output_language.strip()
+    if len(output_language) > 60:
+        raise ConfigError("run.output_language must be at most 60 characters")
+    # The report is for the user, so it speaks the user's language — which only the
+    # orchestrating agent knows, from the conversation. "auto" follows the artifacts.
+    report_language = run_data.get("report_language", "auto")
+    if not isinstance(report_language, str) or not report_language.strip():
+        raise ConfigError("run.report_language must be a non-empty string")
+    report_language = report_language.strip()
+    if len(report_language) > 60:
+        raise ConfigError("run.report_language must be at most 60 characters")
     output_root = _absolute_path(run_data.get("output_root"), "run.output_root", must_exist=False)
     hard_stop_at = reset_at - timedelta(minutes=safety)
     current = now or datetime.now(tz=reset_at.tzinfo)
@@ -334,6 +354,8 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
             wait_for_replenish=wait_for_replenish,
             quota_replenish_probe_minutes=probe_minutes,
             replan_when_queue_empty=replan_when_queue_empty,
+            output_language=output_language,
+            report_language=report_language,
         ),
         billing=billing,
         execution=execution,

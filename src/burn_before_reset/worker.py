@@ -36,6 +36,12 @@ BILLING_ERROR_TERMS = (
 # allowance ran out looks nothing like one that stopped because the account was
 # about to be charged. Providers spell it both ways -- Codex in prose, Claude in a
 # structured snake_case `stop_reason` -- so both spellings are matched.
+#
+# The prose spellings are the fragile half of this list. A 2026-09-01 run ended on
+# "You've hit your monthly spend limit ... your weekly limit resets 12pm", which
+# matched nothing here, so exhaustion was labelled a malformed worker result and the
+# run stopped instead of waiting out the window. Match the shapes a limit message
+# actually takes, not one vendor's current phrasing.
 QUOTA_EXHAUSTED_TERMS = (
     "usage limit",
     "usage_limit",
@@ -43,6 +49,11 @@ QUOTA_EXHAUSTED_TERMS = (
     "rate_limit",
     "quota exceeded",
     "quota_exceeded",
+    "spend limit",
+    "weekly limit",
+    "monthly limit",
+    "limit reached",
+    "limit resets",
 )
 
 
@@ -109,7 +120,28 @@ def _snapshot_diff(
     return changed
 
 
-def _worker_prompt(task: dict[str, Any], _run_dir: Path) -> str:
+def _language_rule(output_language: str) -> str:
+    """Tell the worker which language the artifact is for.
+
+    Without this the worker matches the prompt, which is English, and a user whose
+    projects are in another language gets a night of reports they must translate
+    before they can even decide which ones were worth doing.
+    """
+    if output_language.lower() in {"auto", "source", ""}:
+        return (
+            "- Write the artifact in the language the cited sources are written in. "
+            "If they are mixed, use the language of most of the prose you read. Keep "
+            "identifiers, paths, code, and quoted source text exactly as they appear; "
+            "technical terms may stay in English where that is how practitioners write "
+            "them. Section headings follow the same language as the body."
+        )
+    return (
+        f"- Write the artifact in {output_language}, whatever language the sources use. "
+        "Keep identifiers, paths, code, and quoted source text exactly as they appear."
+    )
+
+
+def _worker_prompt(task: dict[str, Any], output_language: str, _run_dir: Path) -> str:
     source_refs: list[dict[str, Any]] = []
     for value in task.get("source_refs", []):
         if not isinstance(value, dict):
@@ -147,6 +179,7 @@ Rules:
 - Do not delete, move, push, merge, deploy, publish, purchase, or change credentials.
 - Do not modify any source root. In balanced mode, any draft belongs only under the staging cwd.
 - Return one self-contained Markdown artifact as your final answer. Cite local source references by configured relative path, distinguish confirmed facts from inference, and include validation results.
+{_language_rule(output_language)}
 - `deliverables` records where the runner will file that answer. It is not an instruction to write a file, and you may have no tool that could. Do not attempt the write, and do not spend the artifact explaining your tools: open with the content itself.
 - If access, billing, authentication, sandbox, or deadline safety is uncertain, stop and state the blocker.
 """
@@ -291,6 +324,31 @@ def _supervise_worker(
 CLAUDE_READ_ONLY_TOOLS = "Read,Grep,Glob"
 
 
+def _worker_can_write(config: AppConfig) -> bool:
+    """Could this worker have written to a source root at all?
+
+    The snapshot diff observes that an allowlisted file moved. It cannot say who
+    moved it, and on the sources this tool is built to read -- agent session logs,
+    active project directories -- something else almost always did: another agent
+    session appends to its own transcript, a sync client touches an mtime, the
+    user saves a file. Two of three runs on 2026-09-01 stopped on exactly that,
+    discarding completed work and leaving the window unburned.
+
+    Attribution comes from capability, not from the diff. A Claude worker holds
+    Read, Grep and Glob and nothing else; a Codex worker in safe mode runs under a
+    read-only sandbox. Neither can write anywhere, so neither can be the cause.
+    Only `balanced` mode hands Codex a writable sandbox, and there an observed
+    mutation is attributable and still fails closed.
+
+    This does not replace the boundary, it stops guessing about it: the boundary is
+    enforced by the absent tools and the sandbox, and an attempt to reach past it
+    is caught directly by `permission_denials`.
+    """
+    if config.execution.provider == "claude":
+        return False
+    return config.run.mode != "safe"
+
+
 def _worker_command(config: AppConfig, prompt: str, staging: Path, source_roots: list[Path]) -> list[str]:
     """Build the model invocation for the configured provider."""
     if config.execution.provider == "claude":
@@ -357,9 +415,14 @@ def _claude_extract(events_path: Path) -> str:
 def _claude_diagnostics(events_path: Path) -> tuple[str, list[str]]:
     """Everything except the deliverable, plus the tools the worker was refused.
 
-    `result` is the artifact and is deliberately excluded, for the same reason the
-    Codex adapter excludes `agent_message`: scanning the deliverable for words like
-    "billing" throws away correct work.
+    On a successful run `result` is the artifact and is deliberately excluded, for
+    the same reason the Codex adapter excludes `agent_message`: scanning the
+    deliverable for words like "billing" throws away correct work.
+
+    On `is_error` there is no deliverable -- `_claude_extract` refuses to promote
+    it -- and `result` carries the provider's own explanation, which is the only
+    place a closed window is stated in words. Excluding it there hid a quota
+    exhaustion behind "worker produced no completed agent message".
     """
     payload = _claude_result(events_path)
     if not payload:
@@ -371,7 +434,13 @@ def _claude_diagnostics(events_path: Path) -> tuple[str, list[str]]:
         if isinstance(value, str) and value and value != "success":
             diagnostics.append(f"{key}={value}")
     if payload.get("is_error"):
-        errors.append(f"worker reported is_error with subtype {payload.get('subtype')}")
+        failure_text = payload.get("result")
+        failure_text = failure_text.strip() if isinstance(failure_text, str) else ""
+        if failure_text:
+            errors.append(f"worker reported is_error: {failure_text}")
+            diagnostics.append(failure_text)
+        else:
+            errors.append(f"worker reported is_error with subtype {payload.get('subtype')}")
         diagnostics.append("is_error=true")
     for denial in payload.get("permission_denials") or []:
         if isinstance(denial, dict):
@@ -559,7 +628,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
     if _find_git_root(staging) is None:
         subprocess.run([resolve_executable("git"), "init", "-q", str(staging)], check=True, timeout=10)
 
-    prompt = _worker_prompt(task, run_dir)
+    prompt = _worker_prompt(task, config.run.output_language, run_dir)
     write_text_atomic(worker_dir / "PROMPT.md", prompt)
     events_path = worker_dir / "events.jsonl"
     stderr_path = worker_dir / "stderr.log"
@@ -664,6 +733,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
                 "return_code": -1,
                 "timed_out": False,
                 "source_changed": False,
+                "source_write_attributable": False,
                 "source_changed_paths": [],
                 "worker_errors": [],
                 "billing_error": False,
@@ -696,6 +766,8 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
     }
     changed_paths = _snapshot_diff(before, after)
     source_changed = bool(changed_paths)
+    # Observed movement is reported either way; only an attributable write fails.
+    source_write_attributable = source_changed and _worker_can_write(config)
     if config.execution.provider == "claude":
         artifact = _claude_extract(events_path)
     else:
@@ -705,8 +777,14 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
         write_text_atomic(worker_dir / "FINAL_MESSAGE.md", artifact)
     stderr_text = stderr_path.read_text(encoding="utf-8", errors="replace")
     permission_denied = False
+    worker_reported_error = ""
     if config.execution.provider == "claude":
         diagnostic_text, worker_errors = _claude_diagnostics(events_path)
+        claude_payload = _claude_result(events_path)
+        if claude_payload.get("is_error"):
+            reported = claude_payload.get("result")
+            worker_reported_error = reported.strip() if isinstance(reported, str) else ""
+            worker_reported_error = worker_reported_error or "worker reported is_error with no message"
         # A worker that reached for a tool it was not granted stayed inside the
         # boundary only because the boundary held. Its output is suspect and is
         # not promoted; SKILL.md's "stop on permission uncertainty" is enforced
@@ -725,7 +803,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
         and not supervision["guard_failed"]
         and supervision["stop_confirmed"]
         and not supervision["descendant_cleanup_required"]
-        and not source_changed
+        and not source_write_attributable
         and not billing_error
         and not stop_now
         and not permission_denied
@@ -736,6 +814,11 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
     if permission_denied:
         error_type = "PermissionDenied"
         error_message = "worker attempted a tool it was not granted; output kept as diagnostics only"
+    elif worker_reported_error:
+        # The provider refused and said why. Calling that a malformed result sends
+        # the morning reader looking for a parser bug instead of reading the reason.
+        error_type = "WorkerReportedError"
+        error_message = worker_reported_error[:300]
     elif not artifact.strip():
         error_type = "NoFinalMessage"
         error_message = "worker produced no completed agent message"
@@ -748,6 +831,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
         "return_code": supervision["return_code"],
         "timed_out": supervision["timed_out"],
         "source_changed": source_changed,
+        "source_write_attributable": source_write_attributable,
         "source_changed_paths": changed_paths[:MAX_REPORTED_CHANGED_PATHS],
         "worker_errors": worker_errors[:MAX_REPORTED_WORKER_ERRORS],
         "billing_error": billing_error,

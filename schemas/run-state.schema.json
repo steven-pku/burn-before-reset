@@ -82,7 +82,17 @@
       ]
     },
     "source_mutation_detected": {
-      "type": "boolean"
+      "type": "boolean",
+      "description": "A source write was attributed to the Worker, which stops the run. Not the same as movement being observed — see source_movement_observed."
+    },
+    "source_movement_observed": {
+      "type": "boolean",
+      "description": "At least one allowlisted file moved during the run, from any cause. Reported, but on its own it does not stop the run."
+    },
+    "reused_from_prior_runs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Candidates skipped at planning time because an earlier run in the same output root already completed them and their sources have not moved since. Named individually in RUN_PLAN.md."
     },
     "source_changed_paths": {
       "type": "array",

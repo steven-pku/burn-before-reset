@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
 import tempfile
 import time
+import types
 import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -304,6 +306,96 @@ class SkillDiscoveryTests(unittest.TestCase):
                 self.assertEqual(link.resolve(), canonical)
 
 
+class CrossRunDeduplicationTests(unittest.TestCase):
+    """A run that died must not make the next run redo its finished work.
+
+    On 2026-09-01 two runs stopped early and the third re-planned from the same
+    unchanged sources, so three projects were swept three times each and one
+    decision card was written twice: 7 of 27 artifacts were repeats, about a
+    quarter of the night's spend.
+    """
+
+    def _plan_twice(self, mutate=None) -> tuple[dict, dict, str]:
+        """Complete a run, optionally change the source, then plan again."""
+        temporary = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, temporary, True)
+        root = Path(temporary)
+        source = root / "source"
+        source.mkdir()
+        target = source / "work.md"
+        target.write_text("# Work\n\nTODO: verify this claim.\n", encoding="utf-8")
+        config = load_config(write_config(root / "config.toml", source, root / "output"))
+
+        first = plan_run(config)
+        queue = json.loads((first / "QUEUE.json").read_text(encoding="utf-8"))
+        task = queue["tasks"][0]
+        # Book it exactly the way the runner does on success: state plus artifact.
+        state = json.loads((first / "RUN_STATE.json").read_text(encoding="utf-8"))
+        state["completed"] = [task["id"]]
+        (first / "RUN_STATE.json").write_text(json.dumps(state), encoding="utf-8")
+        artifact = first / task["deliverables"][0]
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("# Answer\n\nThe claim holds.\n", encoding="utf-8")
+
+        if mutate is not None:
+            mutate(target)
+
+        second = plan_run(config)
+        second_queue = json.loads((second / "QUEUE.json").read_text(encoding="utf-8"))
+        plan = (second / "RUN_PLAN.md").read_text(encoding="utf-8")
+        return task, second_queue, plan
+
+    def test_unchanged_source_is_not_worked_twice(self) -> None:
+        task, second_queue, plan = self._plan_twice()
+        ids = [t["id"] for t in second_queue["tasks"]]
+        self.assertNotIn(
+            task["id"],
+            ids,
+            "an unchanged source whose task is already answered must not be requeued",
+        )
+
+    def test_the_skip_is_named_not_silent(self) -> None:
+        """Dropping a candidate silently looks identical to never finding it."""
+        task, _, plan = self._plan_twice()
+        self.assertIn("Already answered by an earlier run", plan)
+        self.assertIn(task["id"], plan)
+
+    def test_a_moved_source_is_picked_up_again(self) -> None:
+        """Answered stays answered only until the source moves."""
+
+        def touch(path: Path) -> None:
+            path.write_text("# Work\n\nTODO: verify this claim, again.\n", encoding="utf-8")
+            future = time.time() + 120
+            os.utime(path, (future, future))
+
+        task, second_queue, _ = self._plan_twice(mutate=touch)
+        ids = [t["id"] for t in second_queue["tasks"]]
+        self.assertIn(task["id"], ids, "a source that changed deserves another look")
+
+    def test_a_completion_with_no_artifact_left_does_not_gate(self) -> None:
+        """A task booked done whose deliverable is gone is not an answer anyone can read."""
+
+        def drop_artifact(_path: Path) -> None:
+            for artifact in Path(_path).parents[1].glob("output/*/artifacts/*.md"):
+                artifact.unlink()
+
+        task, second_queue, _ = self._plan_twice(mutate=drop_artifact)
+        ids = [t["id"] for t in second_queue["tasks"]]
+        self.assertIn(task["id"], ids)
+
+    def test_run_state_counts_what_was_reused(self) -> None:
+        temporary = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, temporary, True)
+        root = Path(temporary)
+        source = root / "source"
+        source.mkdir()
+        (source / "work.md").write_text("# Work\n\nTODO: verify this.\n", encoding="utf-8")
+        config = load_config(write_config(root / "config.toml", source, root / "output"))
+        first = plan_run(config)
+        state = json.loads((first / "RUN_STATE.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["reused_from_prior_runs"], 0)
+
+
 class ShippedSchemaTests(unittest.TestCase):
     """The published contracts must keep describing what the code emits."""
 
@@ -589,6 +681,162 @@ class QuotaExhaustionTests(unittest.TestCase):
             self.assertTrue(_contains_quota_exhaustion(diagnostics))
             self.assertTrue(errors)
 
+    def test_exhaustion_stated_only_in_the_result_text_is_caught(self) -> None:
+        """The 2026-09-01 payload, verbatim.
+
+        Every structured field lied: `subtype` said success, `stop_reason` said
+        stop_sequence. The one true statement was the prose in `result`, which the
+        diagnostics deliberately excluded as "the deliverable". The run was booked
+        as a malformed worker result and stopped with hours of window left.
+        """
+        from burn_before_reset.worker import (
+            _claude_diagnostics,
+            _claude_extract,
+            _contains_billing_error,
+            _contains_quota_exhaustion,
+        )
+
+        payload = {
+            "subtype": "success",
+            "is_error": True,
+            "stop_reason": "stop_sequence",
+            "total_cost_usd": 0,
+            "permission_denials": [],
+            "result": (
+                "You've hit your monthly spend limit · raise it at "
+                "claude.ai/settings/usage?from=cc_cli_limit_message · "
+                "your weekly limit resets 12pm (Asia/Singapore)"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "events.jsonl"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            diagnostics, errors = _claude_diagnostics(path)
+
+            self.assertTrue(
+                _contains_quota_exhaustion(diagnostics),
+                "a closed window must be recognised from the provider's own words",
+            )
+            self.assertFalse(
+                _contains_billing_error(diagnostics),
+                "being told where to raise a limit is not being charged",
+            )
+            # The message reaches the morning reader instead of a generic label.
+            self.assertTrue(any("monthly spend limit" in error for error in errors))
+            # It is still not a deliverable: an errored run promotes nothing.
+            self.assertEqual(_claude_extract(path), "")
+
+    def test_errored_worker_is_not_reported_as_malformed_output(self) -> None:
+        """A refusal this code cannot classify is still a refusal, not a parser bug."""
+        from burn_before_reset.runner import _failure_stop_reason
+
+        base = {
+            "billing_error": False,
+            "quota_exhausted": False,
+            "source_changed": False,
+            "deadline_stop": False,
+            "timed_out": False,
+            "stop_confirmed": True,
+        }
+        self.assertEqual(
+            _failure_stop_reason({**base, "error_type": "WorkerReportedError"}),
+            "worker_reported_error",
+        )
+        # A worker that returned nothing at all is still the old, distinct case.
+        self.assertEqual(
+            _failure_stop_reason({**base, "error_type": "NoFinalMessage"}),
+            "invalid_worker_output",
+        )
+
+    def test_worker_reported_error_is_a_known_stop_reason(self) -> None:
+        from burn_before_reset.validation import KNOWN_STOP_REASONS
+
+        self.assertIn("worker_reported_error", KNOWN_STOP_REASONS)
+
+
+class SourceMovementAttributionTests(unittest.TestCase):
+    """Who moved the file, not whether a file moved.
+
+    On 2026-09-01 two runs stopped on `source_mutation_detected` and threw away
+    completed work. The named paths were a Codex session log being appended to by
+    another session, and a project file written by something else on the machine.
+    The Worker in both runs held Read, Grep and Glob and could not write anywhere.
+    """
+
+    def _config(self, provider: str, mode: str) -> types.SimpleNamespace:
+        run = types.SimpleNamespace(mode=mode)
+        execution = types.SimpleNamespace(provider=provider)
+        return types.SimpleNamespace(run=run, execution=execution)
+
+    def test_read_only_worker_is_never_blamed(self) -> None:
+        from burn_before_reset.worker import _worker_can_write
+
+        # A Claude worker gets --tools Read,Grep,Glob; config rejects any other mode.
+        self.assertFalse(_worker_can_write(self._config("claude", "safe")))
+        # A Codex worker in safe mode runs under a read-only sandbox.
+        self.assertFalse(_worker_can_write(self._config("codex", "safe")))
+
+    def test_writable_worker_still_fails_closed(self) -> None:
+        from burn_before_reset.worker import _worker_can_write
+
+        # balanced hands Codex a workspace-write sandbox, so movement is attributable.
+        self.assertTrue(_worker_can_write(self._config("codex", "balanced")))
+
+    def test_ambient_movement_does_not_stop_the_run(self) -> None:
+        from burn_before_reset.runner import _failure_stop_reason
+
+        base = {
+            "billing_error": False,
+            "quota_exhausted": False,
+            "deadline_stop": False,
+            "timed_out": False,
+            "stop_confirmed": True,
+            "error_type": None,
+            # Last night's paths: another agent's session log, and a project file.
+            "source_changed": True,
+            "source_changed_paths": [
+                "/Users/x/.codex/sessions/2026/09/01/rollout-2026-09-01T03-23-39.jsonl",
+                "/Users/x/projects/alpha/progress.md",
+            ],
+        }
+        self.assertNotEqual(
+            _failure_stop_reason({**base, "source_write_attributable": False}),
+            "source_mutation_detected",
+            "a worker that cannot write must not be blamed for a file moving",
+        )
+        self.assertEqual(
+            _failure_stop_reason({**base, "source_write_attributable": True}),
+            "source_mutation_detected",
+            "a worker that could write is still blamed",
+        )
+
+    def test_observed_movement_is_still_reported_on_a_clean_run(self) -> None:
+        """Not stopping must not become not telling."""
+        from burn_before_reset.report import write_morning_report
+
+        state = {
+            "run_id": "run-test",
+            "reset_at": "2026-09-01T12:00:00+08:00",
+            "hard_stop_at": "2026-09-01T11:30:00+08:00",
+            "phase": "stopped",
+            "stop_reason": "queue_exhausted",
+            "queue_sha256": "abc123",
+            "completed": [],
+            "failed": [],
+            "source_mutation_detected": False,
+            "source_movement_observed": True,
+            "source_changed_paths": ["/Users/x/.codex/sessions/2026/09/01/rollout.jsonl"],
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary)
+            write_morning_report(run_dir, state, {"tasks": []})
+            report = (run_dir / "MORNING_REPORT.md").read_text(encoding="utf-8")
+
+        self.assertIn("rollout.jsonl", report, "the paths must still be named")
+        self.assertIn("Source writes attributed to the Worker: no", report)
+        self.assertIn("Allowlisted files that moved during the run: yes", report)
+        self.assertIn("cannot be the cause", report)
+
 
 class SupervisorSurvivalTests(unittest.TestCase):
     """A supervisor that dies mid-run leaves an unreadable, unresumable run."""
@@ -664,3 +912,46 @@ class SupervisorSurvivalTests(unittest.TestCase):
             self.assertEqual(signal_module.getsignal(signal_module.SIGHUP), signal_module.SIG_IGN)
         finally:
             signal_module.signal(signal_module.SIGHUP, previous)
+
+
+class HtmlReportIntegrationTests(unittest.TestCase):
+    """A finished run leaves the user's page beside the agent's Markdown twin."""
+
+    def _fake_codex(self, path: Path) -> Path:
+        path.write_text(
+            "#!/bin/sh\n"
+            "printf '%s\\n' '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"# Done\\n\\nConfirmed from source.\"}}'\n"
+            "printf '%s\\n' '{\"type\":\"turn.completed\"}'\n",
+            encoding="utf-8",
+        )
+        path.chmod(path.stat().st_mode | stat.S_IXUSR)
+        return path
+
+    def test_execute_run_writes_report_html_in_the_configured_language(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "work.md").write_text("# Work\n\nTODO: verify this.\n", encoding="utf-8")
+            fake = self._fake_codex(root / "fake-codex")
+            config_path = write_config(root / "config.toml", source, root / "output", enabled=True, codex_binary=str(fake))
+            text = config_path.read_text(encoding="utf-8").replace("[run]\n", '[run]\nreport_language = "中文"\n', 1)
+            config_path.write_text(text, encoding="utf-8")
+            config = load_config(config_path)
+            self.assertEqual(config.run.report_language, "中文")
+            assert_execution_environment(config, {})
+            run_dir = plan_run(config)
+            execute_run(config, run_dir, Path(__file__).resolve().parents[1] / "scripts" / "bbr.py")
+            page = (run_dir / "REPORT.html").read_text(encoding="utf-8")
+            self.assertIn('<html lang="zh">', page)
+            self.assertIn("BURN&nbsp;BEFORE&nbsp;RESET", page)
+            # The Markdown twin is still the agent's contract and still present.
+            self.assertTrue((run_dir / "MORNING_REPORT.md").is_file())
+
+    def test_report_language_defaults_to_auto(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            config = load_config(write_config(root / "config.toml", source, root / "output"))
+            self.assertEqual(config.run.report_language, "auto")

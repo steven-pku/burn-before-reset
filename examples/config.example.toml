@@ -14,6 +14,13 @@ wait_for_replenish = true
 quota_replenish_probe_minutes = 20
 # When the queue drains with usable time left, re-plan from fresh signals.
 replan_when_queue_empty = true
+# What language the artifacts are written in. "auto" follows the sources the
+# worker actually read. Set a language name ("中文", "English") to force it.
+output_language = "auto"
+# What language REPORT.html speaks — the user's, not the sources'. The agent sets
+# this from the conversation ("中文", "en"). "auto" follows the artifacts. Languages
+# without a built-in dictionary fall back to English.
+report_language = "auto"
 
 [billing]
 # These are user assertions, not automated account verification.

@@ -11,7 +11,7 @@ from typing import Any
 from .config import AppConfig
 from .indexer import index_all
 from .model import SourceRef, TaskSpec
-from .state import freeze_queue, write_json_atomic, write_text_atomic
+from .state import freeze_queue, read_json, write_json_atomic, write_text_atomic
 
 
 def _clean_title(title: str) -> str:
@@ -378,7 +378,14 @@ def _new_run_dir(config: AppConfig, now: datetime) -> Path:
     return run_dir
 
 
-def _run_plan(config: AppConfig, run_dir: Path, records: list[SourceRef], tasks: list[dict[str, Any]]) -> str:
+def _run_plan(
+    config: AppConfig,
+    run_dir: Path,
+    records: list[SourceRef],
+    tasks: list[dict[str, Any]],
+    settled: list[tuple[TaskSpec, dict[str, Any]]] | None = None,
+) -> str:
+    settled = settled or []
     lines = [
         "# Burn Before Reset · Run Plan",
         "",
@@ -388,6 +395,7 @@ def _run_plan(config: AppConfig, run_dir: Path, records: list[SourceRef], tasks:
         f"- Source roots: {len(config.sources)}",
         f"- Eligible candidates: {len(records)}",
         f"- Frozen queue items: {len(tasks)}",
+        f"- Already answered by an earlier run: {len(settled)}",
         "- Execution: disabled until an explicit `--execute` command and config gate both pass",
         "",
         "## Frozen queue",
@@ -411,7 +419,102 @@ def _run_plan(config: AppConfig, run_dir: Path, records: list[SourceRef], tasks:
                 "",
             ]
         )
-    return "\n".join(lines).rstrip() + "\n"
+    return "\n".join(lines).rstrip() + "\n" + _settled_section(settled)
+
+
+def _ref_time(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _newest_source_time(source_refs: Any) -> datetime | None:
+    """The most recent modification across a task's cited sources."""
+    times = [
+        stamp
+        for ref in (source_refs or [])
+        if isinstance(ref, dict)
+        for stamp in [_ref_time(ref.get("modified_at"))]
+        if stamp is not None
+    ]
+    return max(times) if times else None
+
+
+def prior_completions(config: AppConfig, current_run_dir: Path) -> dict[str, dict[str, Any]]:
+    """What earlier runs in this output root already finished, and against what state.
+
+    Runs die. When one does, the next run indexes the same unchanged sources, derives
+    the same task ids from them, and redoes work that is already sitting complete in a
+    sibling run directory. On 2026-09-01 that cost 7 of 27 artifacts — three projects
+    swept three times each — for roughly a quarter of the night's spend.
+
+    Only completions that still have a non-empty artifact on disk count: a task booked
+    as done whose deliverable has since been deleted is not an answer anyone can read.
+    """
+    done: dict[str, dict[str, Any]] = {}
+    try:
+        siblings = sorted(p for p in config.run.output_root.iterdir() if p.is_dir())
+    except OSError:
+        return done
+    for run_dir in siblings:
+        if run_dir.resolve() == current_run_dir.resolve():
+            continue
+        state = read_json(run_dir / "RUN_STATE.json")
+        if not isinstance(state, dict):
+            continue
+        completed = {task_id for task_id in (state.get("completed") or []) if isinstance(task_id, str)}
+        if not completed:
+            continue
+        for queue_path in [run_dir / "QUEUE.json", *sorted(run_dir.glob("QUEUE-r*.json"))]:
+            queue = read_json(queue_path)
+            if not isinstance(queue, dict):
+                continue
+            for task in queue.get("tasks", []):
+                task_id = task.get("id") if isinstance(task, dict) else None
+                if not isinstance(task_id, str) or task_id not in completed:
+                    continue
+                deliverables = task.get("deliverables") or []
+                if not deliverables:
+                    continue
+                artifact = run_dir / str(deliverables[0])
+                try:
+                    if not artifact.is_file() or artifact.stat().st_size == 0:
+                        continue
+                except OSError:
+                    continue
+                newest = _newest_source_time(task.get("source_refs"))
+                if newest is None:
+                    continue
+                previous = done.get(task_id)
+                # Keep the most recent answer, so a stale one never gates a fresh source.
+                if previous is None or newest > previous["source_newest"]:
+                    done[task_id] = {
+                        "source_newest": newest,
+                        "run": run_dir.name,
+                        "artifact": str(artifact),
+                        "title": task.get("title", task_id),
+                    }
+    return done
+
+
+def _already_answered(task: TaskSpec, prior: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """A finding stays answered until its source moves.
+
+    The task id hashes the source reference and its signals, not the file's contents,
+    so an unchanged source re-derives the same id run after run. Comparing modification
+    times is what separates "already done" from "done, but the source has since moved
+    and deserves another look".
+    """
+    record = prior.get(task.id)
+    if record is None:
+        return None
+    newest = _newest_source_time(task.source_refs)
+    if newest is None or newest > record["source_newest"]:
+        return None
+    return record
 
 
 def _eligible_tasks(
@@ -419,11 +522,21 @@ def _eligible_tasks(
     run_dir: Path,
     now: datetime,
     exclude_ids: frozenset[str] = frozenset(),
-) -> tuple[list[TaskSpec], list[TaskSpec]]:
+) -> tuple[list[TaskSpec], list[TaskSpec], list[tuple[TaskSpec, dict[str, Any]]]]:
     """Index the sources as they are right now and pick this round's queue."""
     records = index_all(config.sources)
     candidates = [_task_from_record(record, run_dir, now) for record in records]
     candidates.extend(_sweep_tasks(records, run_dir, now))
+    prior = prior_completions(config, run_dir)
+    settled: list[tuple[TaskSpec, dict[str, Any]]] = []
+    fresh: list[TaskSpec] = []
+    for task in candidates:
+        answered = _already_answered(task, prior)
+        if answered is None:
+            fresh.append(task)
+        else:
+            settled.append((task, answered))
+    candidates = fresh
     eligible = [
         task
         for task in candidates
@@ -443,7 +556,28 @@ def _eligible_tasks(
     keep = {task.id for task in sweeps}
     shortlist = [task for task in eligible if task.id in keep or task in targeted]
     queued = _diversify(shortlist, config.execution.max_tasks)
-    return eligible, queued
+    return eligible, queued, settled
+
+
+def _settled_section(settled: list[tuple[TaskSpec, dict[str, Any]]]) -> str:
+    """Name the work an earlier run already answered, so the skip is auditable.
+
+    Silently dropping candidates would look identical to never having found them.
+    """
+    if not settled:
+        return ""
+    lines = [
+        "",
+        f"### Already answered by an earlier run ({len(settled)} skipped)",
+        "",
+        "These sources have not changed since a previous run in this output root "
+        "completed them, so the night is not spent redoing them. Delete the earlier "
+        "artifact, or point `output_root` somewhere new, to have them picked up again.",
+        "",
+    ]
+    for task, record in sorted(settled, key=lambda pair: pair[0].id):
+        lines.append(f"- `{task.id}` · {task.title} → `{record['run']}` / `{record['artifact']}`")
+    return "\n".join(lines) + "\n"
 
 
 def plan_followup_round(
@@ -461,7 +595,7 @@ def plan_followup_round(
     None when nothing new qualifies — the honest end of the night, not a failure.
     """
     current = now or datetime.now(tz=config.run.reset_at.tzinfo)
-    eligible, queued = _eligible_tasks(config, run_dir, current, exclude_ids)
+    eligible, queued, settled = _eligible_tasks(config, run_dir, current, exclude_ids)
     if not queued:
         return None
     created_at = current.astimezone().isoformat(timespec="seconds")
@@ -475,13 +609,14 @@ def plan_followup_round(
         handle.write(f"\n## Round {round_index} · re-planned at {created_at}\n\n")
         for index, task in enumerate(queued, 1):
             handle.write(f"{index}. `{task.id}` · score {task.score} · {task.title}\n")
+        handle.write(_settled_section(settled))
     return queue_name, queue["tasks_sha256"], queue["tasks"]
 
 
 def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
     current = now or datetime.now(tz=config.run.reset_at.tzinfo)
     run_dir = _new_run_dir(config, current)
-    eligible, queued = _eligible_tasks(config, run_dir, current)
+    eligible, queued, settled = _eligible_tasks(config, run_dir, current)
     candidates = eligible
     created_at = current.astimezone().isoformat(timespec="seconds")
 
@@ -504,6 +639,8 @@ def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
         "failed": [],
         "stop_reason": None,
         "source_mutation_detected": False,
+        "source_movement_observed": False,
+        "reused_from_prior_runs": len(settled),
         "source_changed_paths": [],
         "worker_errors": [],
         "source_check_incomplete": False,
@@ -520,5 +657,7 @@ def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
     write_json_atomic(run_dir / "RUN_STATE.json", state)
     write_text_atomic(run_dir / "CHECKPOINTS.md", "# Checkpoints\n\n")
     write_text_atomic(run_dir / "events.jsonl", "")
-    write_text_atomic(run_dir / "RUN_PLAN.md", _run_plan(config, run_dir, candidates, queue_tasks))
+    write_text_atomic(
+        run_dir / "RUN_PLAN.md", _run_plan(config, run_dir, candidates, queue_tasks, settled)
+    )
     return run_dir

@@ -2,10 +2,10 @@
 project_state: active
 stage: v0-2-bounded-autonomy
 health: amber
-updated_at: 2026-08-31T12:09:00+08:00
+updated_at: 2026-09-02T04:10:00+08:00
 next_action_owner: Steven
-next_action: Short-window autopilot dry run this week (Steven's call D1-B), then the full-premise run before the weekly reset; announce after it passes (D2-A).
-blocked_by: ["`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do."]
+next_action: Grade the 27 artifacts from the 2026-09-01 overnight run ("worth it / fine but low value / wrong pick") — the only input that can replace the proxy scorer. Then decide on announcing (D2-A).
+blocked_by: ["Artifact value is ungraded, so selection is still ranked by how *live* a finding looks rather than by what it is worth.", "`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do."]
 ---
 
 # Burn Before Reset · Status
@@ -33,6 +33,8 @@ blocked_by: ["`verified` also needs a decision on installation targets; PROMOTIO
 - **Quota exhaustion separated from billing fault (2026-08-25)**: `quota_exhausted` stop reason, both spellings matched; activation gate now asks which replenishment cycle `reset_at` belongs to.
 - **Supervisor survival (2026-08-25)**: SIGHUP ignored, SIGTERM/SIGINT finalise receipts (`operator_stop`), zero orphans; previously a killed supervisor left an unreadable, unresumable run.
 - **Scorer rewrite + queue diversity (2026-08-25)**: 194-of-200 identical scores → 18 distinct values on the same corpus; round-robin across projects; `max_tasks` cap 10 → 200; all helper binaries resolved at preflight.
+- **HTML report shipped (2026-09-02)**: `REPORT.html` beside the Markdown twin — fixed-format opening, proverb verdict on what was delivered, validated palette and icon system, handoff-first actions. Adaptation matrix of 17 synthetic scenarios across languages × outcomes × shapes caught two release-blocking defects (Japanese users served a Chinese page; raw `<script>` in the data payload). `run.report_language` added. Details in `VALIDATION.md` (A18–A19).
+- **First full overnight run (2026-09-01)**: unattended, autopilot, real expiring weekly allowance. 25 tasks completed, 27 artifacts, $71.38, and the allowance driven to genuine exhaustion — the thing the tool exists to do, done for the first time. Four defects found and repaired with regression tests, all in `VALIDATION.md`: quota exhaustion misread as a malformed worker result (the refusal was stated only in the `result` text, which diagnostics excluded as "the deliverable"); source-movement detection blaming a worker that held no write tool; a dead run making the next run redo its finished work (7 of 27 artifacts were repeats, ~$25 of the night); and reports written in English over Chinese-language sources because nothing in the run carried a language signal but the prompt itself.
 
 ## In progress
 

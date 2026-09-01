@@ -42,14 +42,19 @@
       "type": "boolean"
     },
     "source_changed": {
-      "type": "boolean"
+      "type": "boolean",
+      "description": "An allowlisted file moved while the Worker ran. An observation, not an accusation: it does not say who moved it."
+    },
+    "source_write_attributable": {
+      "type": "boolean",
+      "description": "source_changed AND the Worker held write capability, so the movement can be attributed to it. This is the condition that fails the task and stops the run. False whenever the Worker was read-only (any Claude worker; Codex in safe mode), because a Worker with no write tool cannot have been the cause."
     },
     "source_changed_paths": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "Allowlisted paths whose size or mtime moved during the run. Evidence for source_changed; a background sync client leaves the same trace as the Worker."
+      "description": "Allowlisted paths whose size or mtime moved during the run. Evidence for source_changed; a background sync client or a concurrent agent session leaves the same trace as the Worker."
     },
     "worker_errors": {
       "type": "array",

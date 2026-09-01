@@ -453,3 +453,184 @@ Strong on input-domain and ledger-semantics reasoning; both correctness findings
 ## Balanced mode · first real run · 2026-08-26 · PASS
 
 Commissioned by Steven to close the long-standing `blocked_by` item. One real `codex exec --sandbox workspace-write` run (`run-20260826-141005-01c39da3`), git source with a dirty tree: 2/2 tasks completed, artifacts promoted, `validate-run` clean, guard exit 0 with confirmed stop. Source bytes and `.git/index` mtime identical before and after — the `--no-optional-locks` and snapshot guarantees hold under the write-capable sandbox too; the worker chose not to use its staging write area, which is permitted. With this, both remaining `blocked_by` tails close: balanced is now evidence-backed, and the Kimi review lane's inconclusive result is treated as compensated by the three completed independent audit seats (sol, Grok 4.6, GPT-5.6 Pro).
+
+## First full overnight run · 2026-09-01 · burned to exhaustion, stopped on two defects
+
+The first run against a real expiring weekly allowance, unattended, autopilot, Claude
+worker in safe mode. Sources: Claude and Codex session logs plus fourteen project
+trees. Hourly inspection by a separate session.
+
+**Result: 25 tasks completed, 27 artifacts, $71.38 burned across three runs.** The
+allowance was driven to genuine exhaustion — the provider refused with "You've hit
+your monthly spend limit" — which is the outcome the tool exists to produce. Two
+defects made the night cost more than it should have.
+
+| | Run | Outcome | Burn |
+|---|---|---|---|
+| 1 | `run-020916-f6a3467b` | 5 done, stopped `source_mutation_detected` | $17.17 |
+| 2 | `run-025752-cad743c2` | 4 done, stopped `source_mutation_detected` | $18.50 |
+| 3 | `run-033437-2db9cbc5` | 16 done, stopped `invalid_worker_output` | $35.71 |
+
+### A15 · Quota exhaustion misread as a malformed worker result
+
+Run 3's final worker returned `is_error: true`, `subtype: "success"`,
+`stop_reason: "stop_sequence"`, and the text *"You've hit your monthly spend limit ·
+raise it at claude.ai/settings/usage · your weekly limit resets 12pm
+(Asia/Singapore)"*. Every structured field was useless or wrong; the one true
+statement was prose in `result`.
+
+Two failures compounded. `QUOTA_EXHAUSTED_TERMS` matched none of "spend limit" or
+"weekly limit" — the same class as the earlier `usage_limit` snake_case miss, and
+the reason a term list is the wrong instrument on its own. Worse, `_claude_diagnostics`
+deliberately excluded `result` as "the deliverable", which is correct on success and
+wrong on error: on `is_error` there is no deliverable, and `result` is the only place
+the refusal is stated. So the exhaustion signal was never scanned. The run took the
+`NoFinalMessage` path, was labelled `invalid_worker_output`, and stopped — instead of
+entering `wait_for_replenish` and riding the window.
+
+**Fix.** `result` now enters diagnostics whenever `is_error` is set, and reaches the
+Morning Report as the worker's own words. The term list gained the shapes a limit
+message actually takes. A provider refusal this code cannot classify is now
+`worker_reported_error`, not `invalid_worker_output` — the morning reader gets the
+message instead of being sent after a parser bug.
+
+### A16 · Source-movement detection blamed a worker that could not write
+
+Runs 1 and 2 both stopped on `source_mutation_detected`, discarding nine completed
+tasks. The named paths:
+
+- a Codex session transcript under `~/.codex/sessions/2026/09/01/` — another Codex
+  session appending to its own transcript **while the run was in progress**
+- an older Codex session transcript under `~/.codex/sessions/`
+- a project's `progress.md`, written by something else on the machine
+
+The worker held `Read,Grep,Glob` under `--safe-mode` and could not write anywhere.
+Neither stop was a boundary violation; both were other processes on the machine.
+
+A3 fixed the noisiest version of this by scoping the snapshot to the indexer's
+allowlist. That was necessary and insufficient: the sources this tool is *built* to
+read — agent session logs, live project trees — are precisely the ones something else
+is always writing to. A before/after diff over them measures machine activity, not
+worker containment. The instrument could not answer the question being asked of it.
+
+**Fix.** Attribution now comes from capability, not from the diff. `source_changed`
+stays an observation and is always reported; `source_write_attributable` — movement
+AND a worker that could write — is what fails the task. Read-only workers (any Claude
+worker; Codex in safe mode) are never blamed. Codex in `balanced` mode still fails
+closed, unchanged. The boundary itself is not weakened: it is enforced by the absent
+tools and the sandbox, and an attempt to reach past it is caught directly by
+`permission_denials`, which already blocks promotion.
+
+The Morning Report now separates "writes attributed to the Worker" from "files that
+moved", so not stopping does not become not telling.
+
+### Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Unit/integration suite | PASS | 101 tests. |
+| Regression tests fail against old behaviour | PASS | HEAD checked out to a scratch worktree with the new tests kept: all 7 new cases red (5 failures + 2 errors); green on the fixed tree. |
+| Schema drift | PASS | `source_write_attributable` and `source_movement_observed` added to the task-result and run-state schemas in the same change; the schema-coverage test caught the omission first. |
+| Real payload as fixture | PASS | A15's test uses the 2026-09-01 worker result verbatim, including the lying `subtype: "success"`. |
+
+### Still unproven
+
+- Whether the 27 artifacts were worth $71.38. The Morning Report asks for a grade per
+  artifact; until that is answered the scorer is ranking how *live* a finding looks,
+  which is a proxy for value, not value.
+- Window utilisation. Run 3 exhausted the allowance in 1.26h with 2.96h nominally
+  left. The report calls that unused window, which reads as failure when the real
+  cause was the allowance running out first. Burn and clock need separating.
+
+### A17 · A dead run made the next run redo its finished work
+
+Runs 1 and 2 stopped early (A16). Run 3 then indexed the same unchanged sources,
+re-derived the same task ids from them, and worked them again — the task id hashes
+the source reference and its signals, so an unchanged source produces the same id
+every time. Nothing in the planner looked at sibling run directories.
+
+Replaying the night through the fix identifies the repeats exactly:
+
+| Run | Completed | Already answered by an earlier run |
+|---|---|---|
+| `run-020916` | 5 | 0 |
+| `run-025752` | 4 | **4** — every task it completed |
+| `run-033437` | 16 | 3 |
+
+Seven of 27 artifacts were repeats: two project directories swept three times
+each, one plan document audited three times, one decision card written twice. Run 2 produced
+nothing that run 1 had not already produced, so its $18.50 bought no new work;
+proportionally the night lost roughly $25 of $71.38 to redoing settled questions.
+
+**Fix.** `prior_completions()` reads sibling run directories in the same
+`output_root` and collects every completed task whose deliverable still exists and
+is non-empty, along with the newest modification time across the sources it cited.
+A candidate is skipped when its id matches and its sources have not moved since —
+*answered stays answered until the source moves*, which keeps a genuinely updated
+file eligible. Skips are counted in `reused_from_prior_runs` and named individually
+in `RUN_PLAN.md` under **Already answered by an earlier run**, with a pointer to the
+run and artifact holding the answer: dropping a candidate silently would look
+identical to never having found it.
+
+A completion whose artifact has since been deleted does not gate, so a pruned run
+directory restores eligibility rather than permanently suppressing a topic.
+
+### Mechanical checks · A17
+
+| Check | Result | Evidence |
+|---|---|---|
+| Unit/integration suite | PASS | 109 tests. |
+| Regression tests fail against old behaviour | PASS | HEAD in a scratch worktree with the new tests kept: the three load-bearing cases red (2 failures + 1 error). The two remaining cases — a moved source is re-picked, a missing artifact does not gate — pass against old code by construction; they guard the fix against over-reach rather than prove it. |
+| Replayed against the real night | PASS | `prior_completions` over the real run directories reports 0 / 4 / 3 avoidable repeats per run, matching the 7 duplicate artifacts found independently by grouping artifacts by task id. |
+| Schema drift | PASS | `reused_from_prior_runs` added to the run-state schema in the same change; the schema-coverage test caught the omission first. |
+
+## HTML report · 2026-09-02 · the user's page, held to a public-release standard
+
+The Markdown Morning Report is the agent's contract. `REPORT.html` is the user's
+deliverable, generated deterministically beside it by `report_html.py`, and the
+first thing a stranger will judge this tool by. Four design rounds with Steven
+converged on: a fixed-format opening (no free prose — every string comes from a
+dictionary, data fills slots), a proverb as the verdict on **what was delivered**
+(never on how much was burned), neutral fact tiles, a validated categorical
+palette with an icon per kind of work, and follow-up ("queue for my agent" → copy a
+handoff brief) as the primary action with grading demoted to optional feedback.
+
+### Adaptation matrix (tests/test_report_html.py, 17 cases)
+
+The page must hold across languages × outcomes × delivery shapes, not on the one
+night it was designed against. Synthetic runs cover: every stop reason the runner
+can write plus `None` and an unknown future reason; each of the seven archetypes as
+the dominant delivery; ties; fault and empty runs; sixty artifacts; an artifact past
+the embed budget; a completed task whose file is gone; a provider that reports
+tokens but no price; a state with no `burn_pace` and no `events.jsonl`; hostile
+titles and bodies; Japanese, Arabic and emoji text; unsupported UI languages; and
+byte-for-byte determinism.
+
+Two real defects were caught by the matrix before anyone outside saw the page:
+
+| | Defect | Fix |
+|---|---|---|
+| A18 | `report_language = "日本語"` selected the **Chinese** dictionary: the language check treated "any CJK character" as Chinese, and 日本語 is written in Han characters. A Japanese user would have received a Chinese page. | Explicit allowlist of Chinese spellings only; everything else that is not `auto` falls back to English. No machine guess. |
+| A19 | The JSON payload feeding the page's script escaped only `</`, so a title containing `<script>` reached the page verbatim inside the JSON block — harmless to the parser, but a raw `<script>` from user data is not an invariant worth arguing about. | Every `<`, `>` and `&` in the payload is `\u00xx`-escaped. |
+
+### Integration
+
+- `run.report_language` (default `auto`): the orchestrating agent sets it from the
+  conversation; the report speaks the user's language, the artifacts follow
+  `output_language`. Languages without a dictionary (currently en, zh) render English.
+- The runner writes `REPORT.html` after `MORNING_REPORT.md`, fail-soft: a rendering
+  error is recorded as `report.html_failed` in events.jsonl and never blocks
+  finalisation. `validate-run` does not require the HTML file.
+- Categorical hues were run through the dataviz validator in both modes (adjacent
+  CVD ΔE 9.1 light / 8.4 dark, normal-vision 22.9 / 19.7); the three light-mode hues
+  below 3:1 always ship with a text label. Orange is reserved for the brand and red
+  for faults, so no kind of work can impersonate a status.
+
+### Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Unit/integration suite | PASS | 128 tests (109 prior + 17 matrix + 2 integration). |
+| Regression tests fail against old behaviour | PASS | A18 red on the previous language check; A19 red on the previous payload escaping; the runner integration test red before `write_html_report` was wired. |
+| No external requests | PASS | Asserted on every rendered scenario. |
+| Strict YAML on SKILL.md after edit | PASS | `yaml.safe_load` clean. |

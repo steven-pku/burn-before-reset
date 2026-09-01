@@ -18,8 +18,8 @@ Cloud Tasks, API-key billing, existing paid Credits, auto top-up, provider switc
 ## Ask this once, up front, in one message
 
 The user is minutes from sleep and will not be there to answer a follow-up. Put every
-question in a single message, take the answers, and go. Six items; the first four are
-required, the last two decide whether the night is worth anything.
+question in a single message, take the answers, and go. Six items; the first three are
+required, the last three shape whether the night is worth anything.
 
 **1 · Which directories may I read?**
 Run `python3 scripts/bbr.py discover` first and offer the proposals — session logs rank
@@ -39,9 +39,9 @@ Subscription login in use, no pay-per-use balance available, auto top-up or extr
 off. This is the user's assertion; the tool cannot verify the account.
 
 **4 · Review the plan, or autopilot?**
-Autopilot (看着办) is the expected answer overnight and **is** the standing
-authorization: discover, configure, plan, and execute without coming back. Review mode
-freezes the queue and waits. Either way, morning review is where judgment re-enters.
+Autopilot (看着办) is the expected answer overnight: discover, configure, plan, and
+execute without coming back. Review mode freezes the queue and waits. Either way,
+morning review is where judgment re-enters.
 
 **5 · What matters right now?** *(optional, highest-value question here)*
 One line — a project, a deadline, a theme. Nothing else in the run knows which of the
@@ -60,21 +60,19 @@ These confirmations are a fail-closed gate, not proof that the server will never
 When current official documentation cannot settle a billing question, label it unknown
 and refuse to run unattended.
 
-Continuation is on by default (`wait_for_replenish = true`): a closed inner window
-pauses the run, it does not end it. A drained queue with usable time left triggers a
-re-planning round; a round that finds nothing new ends the run honestly.
+Continuation is on by default (`wait_for_replenish = true`).
 
 ## Fixed sequence
 
 1. Read [the risk policy](references/risk-policy.md). Read the matching reference only when the task touches a data source or task format.
-2. In autopilot, run `python3 scripts/bbr.py discover` and choose sources with judgment: session logs first (they exist for every Claude/Codex user), then recently active repositories and document trees. Drop anything sensitive; tighten `exclude_fragments`. Proposals are read-only suggestions, not a config.
+2. In autopilot, run `python3 scripts/bbr.py discover` and choose sources with judgment: session logs first (they exist for every Claude/Codex user), then recently active repositories and document trees. Drop anything sensitive; tighten `exclude_fragments`. Proposals are read-only suggestions, not a config. Set `run.report_language` to the language the user is writing in — the report is for them, and nothing else in the run can know it.
 3. Compute `hard_stop_at = reset_at - safety_buffer` from system time. Under twenty minutes remaining: refuse. Under sixty minutes: plan only.
 4. Run `python3 scripts/bbr.py validate-config --config <config.toml>`, then `python3 scripts/bbr.py plan --config <config.toml>`.
 5. Read back `RUN_PLAN.md`, `QUEUE.json`, and `RUN_STATE.json`. Confirm the queue is frozen, every item is traceable to a source, and every item has a deliverable, a validation rule, and a write boundary.
 6. Run `python3 scripts/bbr.py run --config <config.toml> --execute` when the mode allows it: in autopilot, the up-front 看着办 answer **is** the standing authorization and execution follows planning immediately; in review mode, wait for the user to say "execute". Either way the config must set `execution.enabled = true`.
 7. The runner starts the external deadline guard before the Worker and supervises both. A lost guard, a descendant that needs cleanup, or an unconfirmed stop is a failure. Never rely on the model to stop itself.
-8. When a queue drains with usable time left, the runner re-plans from fresh signals (`replan_when_queue_empty`); a round that finds nothing new ends the run. Filler tasks are never invented — every task traces to a real signal.
-9. Read back `MORNING_REPORT.md` and `STOP_REASON`. No read-back, a failed validation, a timeout, or an empty result means the run is not a success.
+8. When a queue drains with usable time left, the runner re-plans from fresh signals (`replan_when_queue_empty`); a round that finds nothing new ends the run. Filler tasks are never invented — every task traces to a real signal. Work an earlier run in the same `output_root` finished is skipped unless its source moved, and named in `RUN_PLAN.md` — a restart after a crash resumes rather than redoes.
+9. Read back `MORNING_REPORT.md` and `STOP_REASON`. No read-back, a failed validation, a timeout, or an empty result means the run is not a success. `REPORT.html` is the user's copy of the same night — hand them the path; never paraphrase it.
 
 ## Non-negotiable rules
 
@@ -88,7 +86,10 @@ re-planning round; a round that finds nothing new ends the run honestly.
 
 ## Reading the receipts
 
-- `source_changed` is backed by named paths under **Allowlisted paths that moved during the run**. A background sync client touching an indexed file leaves the same trace as the Worker writing to it, so check the paths before calling it a boundary violation.
+- **Allowlisted paths that moved during the run** lists indexed files that changed
+  while a Worker ran. Movement alone does not stop the run — session logs and live
+  project trees move on their own. Only a Worker that *could* write (Codex
+  `balanced`) is blamed; the line above the list says which happened.
 - **Errors reported by the Worker** lists error events that arrived even on a zero-exit run. Read them before trusting any artifact.
 - `workers/<task>/DROPPED_ENV.txt`, when present, lists environment variables withheld from the Worker because they could redirect the endpoint or supply a key.
 - `STOP_REASON` distinguishes `quota_exhausted` -- the allowance ran out and waiting
@@ -100,7 +101,7 @@ re-planning round; a round that finds nothing new ends the run honestly.
 
 ## Output contract
 
-Every run directory contains `RUN_PLAN.md`, `CANDIDATES.jsonl`, `QUEUE.json`, `RUN_STATE.json`, `CHECKPOINTS.md`, `events.jsonl`, `artifacts/`, `MORNING_REPORT.md`, and `STOP_REASON`.
+Every run directory contains `RUN_PLAN.md`, `CANDIDATES.jsonl`, `QUEUE.json`, `RUN_STATE.json`, `CHECKPOINTS.md`, `events.jsonl`, `artifacts/`, `MORNING_REPORT.md`, `REPORT.html`, and `STOP_REASON`.
 
 ## Load on demand
 
@@ -124,3 +125,7 @@ Findings are shaped by what was found, not by one generic objective:
 
 The last row is the one a marker search cannot reach on its own, and it is capped at
 a third of the queue: sweeps are the breadth of a night, targeted tasks are its bulk.
+
+Reports follow the language of the sources they came from (`output_language`, default
+`auto`); this tool being written in English is no reason to return the night's work in
+a language the user does not work in.
