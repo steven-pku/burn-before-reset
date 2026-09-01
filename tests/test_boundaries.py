@@ -346,7 +346,7 @@ class CrossRunDeduplicationTests(unittest.TestCase):
         return task, second_queue, plan
 
     def test_unchanged_source_is_not_worked_twice(self) -> None:
-        task, second_queue, plan = self._plan_twice()
+        task, second_queue, _plan = self._plan_twice()
         ids = [t["id"] for t in second_queue["tasks"]]
         self.assertNotIn(
             task["id"],

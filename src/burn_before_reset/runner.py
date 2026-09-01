@@ -430,6 +430,6 @@ def execute_run(config: AppConfig, run_dir: Path, entry_script: Path) -> dict[st
     # this one must never be the reason a finished run fails to finalise.
     try:
         write_html_report(run_dir, state, language=config.run.report_language)
-    except Exception as exc:  # noqa: BLE001 — receipts are already on disk
+    except Exception as exc:  # receipts are already on disk; the page must not block finalisation
         _event(run_dir / "events.jsonl", "report.html_failed", error=" ".join(str(exc).split())[:300])
     return state

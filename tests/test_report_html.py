@@ -143,7 +143,7 @@ class ReportScenarioTests(unittest.TestCase):
 
     # ---- every outcome the runner can write, in both languages ----
     def test_every_stop_reason_renders_in_both_languages(self) -> None:
-        reasons = sorted(KNOWN_STOP_REASONS) + [None, "some_future_reason"]
+        reasons = [*sorted(KNOWN_STOP_REASONS), None, "some_future_reason"]
         for reason in reasons:
             for lang in ("zh", "en"):
                 with self.subTest(reason=reason, lang=lang):
@@ -159,7 +159,7 @@ class ReportScenarioTests(unittest.TestCase):
     # ---- the proverb is a pure function of what was delivered ----
     def test_each_archetype_as_dominant_picks_its_own_proverb(self) -> None:
         for archetype in ARCHETYPE_ORDER:
-            items = [(archetype, f"{archetype}-{i}", "p") for i in range(3)] + [("verify" if archetype != "verify" else "sweep", "other", "p")]
+            items = [*[(archetype, f"{archetype}-{i}", "p") for i in range(3)], ("verify" if archetype != "verify" else "sweep", "other", "p")]
             key, dominant = pick_proverb("good", [{"archetype": a} for a, _, _ in items])
             self.assertEqual((key, dominant), (archetype, archetype))
             for lang in ("zh", "en"):
