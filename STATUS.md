@@ -1,11 +1,11 @@
 ---
 project_state: active
-stage: v0-2-bounded-autonomy
+stage: v0-3-public
 health: amber
-updated_at: 2026-09-02T04:10:00+08:00
-next_action_owner: Steven
-next_action: Grade the 27 artifacts from the 2026-09-01 overnight run ("worth it / fine but low value / wrong pick") — the only input that can replace the proxy scorer. Then decide on announcing (D2-A).
-blocked_by: ["Artifact value is ungraded, so selection is still ranked by how *live* a finding looks rather than by what it is worth.", "`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do."]
+updated_at: 2026-09-02T14:30:00+08:00
+next_action_owner: Claude
+next_action: A fresh session covers three things — final polish of the Skill itself, launch posts for X in English and Chinese, and promotional video plus image sets for Xiaohongshu and Douyin. Steven still owes the 27 artifact grades and the Settings upload of the social preview.
+blocked_by: ["Promotional assets have no agreed landing yet: they must not enter the public repository.", "Artifact value is ungraded, so selection is still ranked by how *live* a finding looks rather than by what it is worth.", "`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do."]
 ---
 
 # Burn Before Reset · Status
@@ -33,6 +33,7 @@ blocked_by: ["Artifact value is ungraded, so selection is still ranked by how *l
 - **Quota exhaustion separated from billing fault (2026-08-25)**: `quota_exhausted` stop reason, both spellings matched; activation gate now asks which replenishment cycle `reset_at` belongs to.
 - **Supervisor survival (2026-08-25)**: SIGHUP ignored, SIGTERM/SIGINT finalise receipts (`operator_stop`), zero orphans; previously a killed supervisor left an unreadable, unresumable run.
 - **Scorer rewrite + queue diversity (2026-08-25)**: 194-of-200 identical scores → 18 distinct values on the same corpus; round-robin across projects; `max_tasks` cap 10 → 200; all helper binaries resolved at preflight.
+- **Public release (2026-09-02)**: repository made public at Steven's instruction after a desensitisation sweep (six sensitive paths and internal project names removed from the ledgers and a test fixture). v0.3.0 tagged and released, v0.2.0 back-filled; community profile 57% → 100% (code of conduct, contributing guide, issue and PR templates); topics 8 → 12; social preview regenerated through the Codex image channel. CI green on every push. Remaining manual step: the Settings upload of the preview image, which GitHub exposes no API for.
 - **Fourth external audit adopted (2026-09-02)**: Grok 4.6 and Kimi seats on `8bcc5d0`; nine findings adopted with a regression module (A20–A28), three declined with reasons; a Codex Sol seat then re-reviewed the adoption itself (see VALIDATION.md). The headline: `--safe-mode` never removed built-in tools — `--restricted` does, and is now load-bearing. Details in `VALIDATION.md`.
 - **v0.3.0 released (2026-09-02)**: community profile at 100% (code of conduct, contributing guide, issue and PR templates), launch assets re-rendered in the v0.3 identity, README showcase of `REPORT.html`, CHANGELOG 0.3.0, GitHub Releases for v0.3.0 (latest) and v0.2.0. CI green on `8b19e28` (lint + six-way matrix). The social-preview upload in Settings is the one manual step left.
 - **HTML report shipped (2026-09-02)**: `REPORT.html` beside the Markdown twin — fixed-format opening, proverb verdict on what was delivered, validated palette and icon system, handoff-first actions. Adaptation matrix of 17 synthetic scenarios across languages × outcomes × shapes caught two release-blocking defects (Japanese users served a Chinese page; raw `<script>` in the data payload). `run.report_language` added. Details in `VALIDATION.md` (A18–A19).
