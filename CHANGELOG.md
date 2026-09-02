@@ -10,6 +10,20 @@ record of what has actually been proven.
 
 ## [Unreleased]
 
+### Fixed
+
+- Fourth external audit round (Grok 4.6, Kimi), all with regression tests that fail
+  against `8bcc5d0` — see `VALIDATION.md` A20–A28: billing upsell words no longer
+  outrank a window signal; `--restricted` joins `--safe-mode` in the Claude worker
+  command (the documented tool-removal flag); the worker's own transcript directory
+  is excluded from the source snapshot; sources under the temp family are treated as
+  writable by any Codex sandbox; `report_language = "auto"` no longer picks Chinese
+  for Japanese or Korean text; de-duplication counts any mtime change as movement,
+  stamps git-dirty from the dirty files, survives corrupt sibling ledgers, rejects
+  whitespace artifacts and path traversal, and folds sweep membership into the
+  sweep id; the Markdown report no longer calls exhausted quota "unused window".
+
+
 ## [0.3.0] — 2026-09-02
 
 ### Added

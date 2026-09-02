@@ -33,7 +33,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .state import read_json, write_text_atomic
+from .state import TASK_ID_PATTERN, read_json, write_text_atomic
 
 MAX_EMBED_BYTES = 8_000_000
 REPORT_BASENAME = "REPORT.html"
@@ -153,26 +153,34 @@ def _archetype_of(title: str) -> str:
     return DEFAULT_ARCHETYPE
 
 
-_CJK = re.compile(r"[぀-ヿ㐀-鿿豈-﫿]")
+# Han ideographs only. The first draft's range started at U+8C48 and ran to U+FAFF,
+# which swallowed every Hangul syllable, and it counted kana as Chinese evidence;
+# both handed Japanese and Korean users a Chinese page on the default `auto` path.
+_HAN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\U00020000-\U0002a6df]")
+# Scripts that mark a text as *not* Chinese, whatever Han it also carries.
+_NOT_CHINESE = re.compile(r"[\u3040-\u30ff\u31f0-\u31ff\uac00-\ud7af\u1100-\u11ff]")
 
 
 # Only these spellings select the Chinese dictionary. "Any CJK character" was the
 # first draft, and it handed a Japanese user (日本語 is written in Han characters) a
 # Chinese page. Everything that is not explicitly Chinese or auto falls to English.
-CHINESE_NAMES = {"zh", "zh-cn", "zh-tw", "zh-hans", "zh-hant", "chinese", "中文", "汉语", "漢語",
-                 "简体中文", "繁體中文", "繁体中文", "华语", "華語", "普通话", "國語"}
+CHINESE_NAMES = {"zh", "zh-cn", "zh-tw", "zh-hk", "zh-sg", "zh-mo", "zh-hans", "zh-hant", "chinese",
+                 "中文", "汉语", "漢語", "简体中文", "繁體中文", "繁体中文", "华语", "華語", "普通话", "國語"}
 
 
 def _chrome_language(requested: str, sample_text: str) -> str:
-    lowered = (requested or "auto").strip().lower()
+    lowered = (requested or "auto").strip().lower().replace("_", "-")
     if lowered in CHINESE_NAMES:
         return "zh"
     if lowered not in {"auto", "source", ""}:
         return "en"
-    relevant = [ch for ch in sample_text if ch.isalpha() or _CJK.match(ch)]
+    # auto: Chinese only when the sample is Han-heavy and carries no kana or Hangul.
+    if _NOT_CHINESE.search(sample_text):
+        return "en"
+    relevant = [ch for ch in sample_text if ch.isalpha()]
     if not relevant:
         return "en"
-    ratio = sum(1 for ch in relevant if _CJK.match(ch)) / len(relevant)
+    ratio = sum(1 for ch in relevant if _HAN.match(ch)) / len(relevant)
     return "zh" if ratio > 0.2 else "en"
 
 
@@ -451,7 +459,7 @@ def _merged_tasks(run_dir: Path) -> dict[str, dict[str, Any]]:
         if not isinstance(queue, dict):
             continue
         for task in queue.get("tasks", []):
-            if isinstance(task, dict) and isinstance(task.get("id"), str):
+            if isinstance(task, dict) and isinstance(task.get("id"), str) and TASK_ID_PATTERN.fullmatch(task["id"]):
                 tasks[task["id"]] = task
     return tasks
 
@@ -1151,7 +1159,7 @@ def _watch_section(events: list[dict[str, Any]], chrome: dict[str, Any]) -> str:
         elif etype == "quota.waiting":
             detail = f"cycle {event.get('wait_cycle', '?')}"
         elif etype == "round.planned":
-            detail = str(event.get("queue", ""))
+            detail = f"round {event.get('round_index', '?')} · {event.get('tasks', '?')} tasks"
         elif etype == "run.stopped":
             detail = str(event.get("stop_reason", ""))
         ticks.append(

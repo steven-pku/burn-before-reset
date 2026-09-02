@@ -634,3 +634,54 @@ Two real defects were caught by the matrix before anyone outside saw the page:
 | Regression tests fail against old behaviour | PASS | A18 red on the previous language check; A19 red on the previous payload escaping; the runner integration test red before `write_html_report` was wired. |
 | No external requests | PASS | Asserted on every rendered scenario. |
 | Strict YAML on SKILL.md after edit | PASS | `yaml.safe_load` clean. |
+
+## Fourth external audit · 2026-09-02 · Grok 4.6 and Kimi seats on `8bcc5d0`
+
+Two independent seats, same brief, same commit; their findings overlapped on four
+points and each added what the other missed. Every finding below was verified
+against the tree and the installed CLI before adoption. The regression module is
+`tests/test_audit_round4.py`: 17 cases, of which 14 fail and 3 error against `8bcc5d0`
+(the errors are the three changed signatures) and all pass after the fixes.
+
+### Adopted
+
+| | Finding (seat) | Verified as | Fix |
+|---|---|---|---|
+| A20 | Billing outranked a window signal: upsell words in a limit message ("enable auto top-up", "billing cycle") stopped the run as a charging fault instead of pausing; bare `"limit reached"` classified context-window errors as exhaustion (both seats). | Term lists and precedence as described in `worker.py`/`runner.py`. | Hard billing terms (a charge path: `credit balance`, `authentication failed`, `billing details`, `payment method`…) fail closed regardless; soft terms (`billing`, `paid credits`, `auto top-up`) count only without a window signal. `limit reached` dropped. `classify_refusal()`. |
+| A21 | `--safe-mode` does not remove built-in tools; `--restricted` is the documented removal of code-running tools and WebFetch (Grok, from `claude --help`). | Confirmed on the installed CLI: `--safe-mode` "starts with all customizations… disabled"; `--restricted` "removes the built-in tools that run commands or code … and WebFetch unless `--tools` names them". | `--restricted` added to the worker command and to the load-bearing flag set; preflight now matches whole flags, not substrings; SECURITY.md restates the guarantee as `--tools` allowlist + `--restricted`, not `--safe-mode`. |
+| A22 | The Claude worker writes its own transcript into the user's session root, in a directory named after its cwd, so a `claude_sessions` source reports movement on every task (Kimi, hypothesis). | Confirmed: `~/.claude/projects/…-staging-<task>/` directories exist for every task of the 09-01 runs. | The snapshot skips paths carrying the run's own name. |
+| A23 | A16's capability rule treated every safe-mode Codex worker as unable to write anywhere, but read-only sandboxes leave the temp family writable, so a source root under `$TMPDIR` could be written and the run would continue (both seats, hypothesis on the sandbox fact). | Sandbox behaviour not probed; the exposure is real regardless of it. | Attribution is now per path: movement under `/tmp`, `/var/folders`, `$TMPDIR` is attributable to any Codex worker. Docstring no longer claims "cannot write anywhere". |
+| A24 | `report_language = "auto"` still picked Chinese for Japanese and Korean text: kana were counted as Chinese evidence and the Han range literally began at U+8C48 and ran to U+FAFF, swallowing every Hangul syllable (both seats; Korean and `zh-HK` from Grok). | Reproduced: pure Japanese → zh, pure Korean → zh, `zh-HK` → en. | Han-only ranges; any kana or Hangul in the sample vetoes Chinese; regional spellings (`zh-hk`, `zh-sg`, `zh_CN`…) normalised. `output_language` is validated as a language name before it becomes a prompt rule. |
+| A25 | De-duplication treated only a *newer* stamp as movement, so `cp -p`, `tar -x`, `touch -r` or a checkout that set an older mtime was silently suppressed; naive stamps crashed the comparison (both seats). | Reproduced. | Any difference is movement; naive stamps are assumed local, mirroring `_recency`. |
+| A26 | Git-dirty freshness used the repository *root* mtime, which POSIX does not advance on a content edit, so further uncommitted changes were suppressed indefinitely (both seats, Grok with a nested-edit reproduction). | Reproduced. | Stamp is the newest mtime over the files `git status` lists. |
+| A27 | `prior_completions` parsed sibling ledgers with no defences: one truncated `RUN_STATE.json` in `output_root` raised through `plan_run`; `deliverables[0]` was stat'ed without a traversal check; a whitespace-only artifact counted as an answer; sweep `newest` was a string max and a sweep's identity ignored its membership (Kimi; sweep points from both). | Reproduced. | Per-sibling try/except; ids validated against `TASK_ID_PATTERN`; deliverable must resolve inside the sibling; non-empty means non-whitespace; sweep `newest` is a datetime max and the member count is part of the sweep id. |
+| A28 | The Markdown report printed "*N h of the window were left unused*" on a `quota_exhausted` stop, reading exhaustion as under-achievement (both seats; the 09-01 "still unproven" item, now closed). | Reproduced. | The line is suppressed for `quota_exhausted` and `worker_call_cap`. |
+
+Also fixed from the same round: the `round.planned` detail in `REPORT.html` read a
+field the runner never emits (Kimi); `_merged_tasks` now drops ids that fail
+`TASK_ID_PATTERN` so a foreign run directory cannot reach the page's selectors (Grok).
+
+### Not adopted, and why
+
+- **Roll A16 back / blame `balanced` less.** Kimi argued `balanced` is confined mechanically too and should not be the one mode still stopped by movement. Kept as is: `balanced` is the one mode holding a write-capable sandbox and the least exercised in real runs; the diff stays its tripwire until that changes. The per-path rule above repairs the actual hole.
+- **Short backoff for a bare `rate limit`** (Kimi). A transient 429 currently earns a full replenishment probe interval. Bounded by the hard stop and the call cap, so a throttle costs minutes, never the night. Deferred to a follow-up with its own test.
+- **Codex TMPDIR sandbox probe.** Not run; the fix does not depend on the outcome.
+
+### Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Unit/integration suite | PASS | 145 tests. |
+| Round-4 module against `8bcc5d0` | PASS (red) | 14 failures + 3 errors of 17; all green after. |
+| ruff | PASS | Clean. |
+| `claude --help` re-probe | PASS | `--restricted` advertised on the installed CLI; preflight would refuse a CLI without it. |
+
+### Seat performance
+
+Both seats read the whole tree, cited file:line, and separated reproductions from
+hypotheses as the brief asked. Grok's `--help` reading overturned a claim this
+project had carried since 08-25 — the single most valuable finding of the round.
+Kimi's transcript-noise hypothesis was confirmed empirically within minutes and
+its sibling-ledger robustness list was the most complete. The overlap between the
+two on billing precedence, git-dirty stamps and `auto` language is what makes the
+adoption confident.

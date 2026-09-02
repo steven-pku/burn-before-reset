@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import subprocess
 import tomllib
 from dataclasses import dataclass
@@ -25,6 +26,7 @@ class ConfigError(ValueError):
 # fallback — that reopens the MCP write-tool hole the flag exists to close.
 CLAUDE_LOAD_BEARING_FLAGS = (
     "--safe-mode",
+    "--restricted",
     "--strict-mcp-config",
     "--permission-mode",
     "--tools",
@@ -419,7 +421,12 @@ def assert_claude_cli_contract(binary: str) -> None:
     except (OSError, subprocess.SubprocessError) as exc:
         raise ConfigError(f"cannot probe {binary} --help: {exc}") from exc
     advertised = probe.stdout + probe.stderr
-    missing = [flag for flag in CLAUDE_LOAD_BEARING_FLAGS if flag not in advertised]
+    # Whole-flag match: "--tools" appears inside the prose of other flags' help
+    # text, so a bare substring test could pass with the real flag removed.
+    missing = [
+        flag for flag in CLAUDE_LOAD_BEARING_FLAGS
+        if not re.search(r"(?<![\w-])" + re.escape(flag) + r"(?![\w-])", advertised)
+    ]
     if missing:
         raise ConfigError(
             f"{binary} --help does not advertise {', '.join(missing)}; "

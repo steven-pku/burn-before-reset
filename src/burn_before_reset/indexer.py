@@ -86,7 +86,22 @@ def _git_status(source: SourceSettings) -> SourceRef | None:
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     if not lines:
         return None
-    modified = datetime.fromtimestamp(source.root.stat().st_mtime).astimezone().isoformat(timespec="seconds")
+    # The freshness stamp is the newest dirty *file*, not the repository root: a
+    # directory's mtime does not move when a tracked file's content changes, so a
+    # root-based stamp let cross-run de-duplication skip a repository whose
+    # uncommitted work had moved on (fourth audit round).
+    stamps: list[float] = []
+    for line in lines:
+        target = line[3:].strip()
+        if " -> " in target:
+            target = target.split(" -> ", 1)[1]
+        target = target.strip('"')
+        try:
+            stamps.append((source.root / target).stat().st_mtime)
+        except OSError:
+            continue
+    newest = max(stamps) if stamps else source.root.stat().st_mtime
+    modified = datetime.fromtimestamp(newest).astimezone().isoformat(timespec="seconds")
     return SourceRef(
         source_type="git",
         root=str(source.root),

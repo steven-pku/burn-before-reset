@@ -4,14 +4,14 @@ import hashlib
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .config import AppConfig
 from .indexer import index_all
 from .model import SourceRef, TaskSpec
-from .state import freeze_queue, read_json, write_json_atomic, write_text_atomic
+from .state import TASK_ID_PATTERN, freeze_queue, read_json, write_json_atomic, write_text_atomic
 
 
 def _clean_title(title: str) -> str:
@@ -284,7 +284,8 @@ def _sweep_tasks(records: list[SourceRef], run_dir: Path, now: datetime) -> list
     for (root, project), members in sorted(by_project.items()):
         if len(members) < SWEEP_MIN_RECORDS:
             continue
-        newest = max(member.modified_at for member in members)
+        # datetime max, not string max: mixed offsets would otherwise sort wrong.
+        newest = max(members, key=lambda m: _ref_time(m.modified_at) or datetime.min.replace(tzinfo=UTC)).modified_at
         signals = sorted({signal for member in members for signal in member.signals})
         reference = SourceRef(
             source_type="markdown",
@@ -295,7 +296,9 @@ def _sweep_tasks(records: list[SourceRef], run_dir: Path, now: datetime) -> list
             signals=tuple(signals),
             snippets=(f"{len(members)} files in this project carry unfinished-work markers",),
         )
-        task_id = "sweep-" + hashlib.sha256(f"{root}\0{project}".encode()).hexdigest()[:12]
+        # Membership is part of the identity: a project that gained or lost marked
+        # files is a different sweep, so an earlier answer cannot suppress it.
+        task_id = "sweep-" + hashlib.sha256(f"{root}\0{project}\0{len(members)}".encode()).hexdigest()[:12]
         tasks.append(
             TaskSpec(
                 id=task_id,
@@ -426,9 +429,14 @@ def _ref_time(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        stamp = datetime.fromisoformat(value)
     except ValueError:
         return None
+    if stamp.tzinfo is None:
+        # A hand-edited or foreign ledger may carry a naive stamp; comparing it
+        # with an aware one raises. Assume local time, as _recency already does.
+        stamp = stamp.astimezone()
+    return stamp
 
 
 def _newest_source_time(source_refs: Any) -> datetime | None:
@@ -462,27 +470,37 @@ def prior_completions(config: AppConfig, current_run_dir: Path) -> dict[str, dic
     for run_dir in siblings:
         if run_dir.resolve() == current_run_dir.resolve():
             continue
-        state = read_json(run_dir / "RUN_STATE.json")
+        try:
+            state = read_json(run_dir / "RUN_STATE.json")
+        except (OSError, ValueError):
+            # A truncated or sync-conflicted sibling must not brick every future
+            # plan; it simply contributes nothing.
+            continue
         if not isinstance(state, dict):
             continue
         completed = {task_id for task_id in (state.get("completed") or []) if isinstance(task_id, str)}
         if not completed:
             continue
         for queue_path in [run_dir / "QUEUE.json", *sorted(run_dir.glob("QUEUE-r*.json"))]:
-            queue = read_json(queue_path)
+            try:
+                queue = read_json(queue_path)
+            except (OSError, ValueError):
+                continue
             if not isinstance(queue, dict):
                 continue
             for task in queue.get("tasks", []):
                 task_id = task.get("id") if isinstance(task, dict) else None
-                if not isinstance(task_id, str) or task_id not in completed:
+                if not isinstance(task_id, str) or not TASK_ID_PATTERN.fullmatch(task_id) or task_id not in completed:
                     continue
                 deliverables = task.get("deliverables") or []
-                if not deliverables:
+                if not deliverables or not isinstance(deliverables[0], str):
                     continue
-                artifact = run_dir / str(deliverables[0])
+                artifact = (run_dir / deliverables[0]).resolve(strict=False)
+                if not artifact.is_relative_to(run_dir.resolve(strict=False)):
+                    continue  # a sibling ledger is data, never a path oracle
                 try:
-                    if not artifact.is_file() or artifact.stat().st_size == 0:
-                        continue
+                    if not artifact.is_file() or not artifact.read_bytes()[:256].strip():
+                        continue  # whitespace is not an answer anyone can read
                 except OSError:
                     continue
                 newest = _newest_source_time(task.get("source_refs"))
@@ -512,7 +530,9 @@ def _already_answered(task: TaskSpec, prior: dict[str, dict[str, Any]]) -> dict[
     if record is None:
         return None
     newest = _newest_source_time(task.source_refs)
-    if newest is None or newest > record["source_newest"]:
+    # Any difference is movement. A stamp that went *backwards* (cp -p, tar -x,
+    # touch -r, a checkout) is still new content the earlier answer never saw.
+    if newest is None or newest != record["source_newest"]:
         return None
     return record
 

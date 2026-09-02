@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -23,25 +25,33 @@ ENV_DENY_EXACT = frozenset({"OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_ORGANIZAT
 ENV_DENY_SUFFIXES = ("_API_KEY", "_API_BASE", "_BASE_URL", "_AUTH_TOKEN", "_SECRET_KEY")
 
 
-BILLING_ERROR_TERMS = (
-    "billing",
+# A refusal is classified from its diagnostics, never from the artifact. Two lists,
+# and a precedence rule that the fourth audit round found backwards: providers write
+# upsell into their limit messages ("enable auto top-up", "check your billing"), and
+# a bare "billing" match used to outrank a clear window signal, turning a pause into
+# a fault. Hard billing terms describe a *charge path* and always win; soft terms
+# are upsell vocabulary and only count when no window signal is present.
+BILLING_HARD_TERMS = (
     "credit balance",
+    "authentication failed",
+    "billing error",
+    "billing details",
+    "payment method",
+    "insufficient funds",
+)
+BILLING_SOFT_TERMS = (
+    "billing",
     "paid credits",
     "auto top-up",
-    "authentication failed",
 )
+BILLING_ERROR_TERMS = BILLING_HARD_TERMS + BILLING_SOFT_TERMS
 
 # Running out of subscription allowance is not a billing fault. It is the ordinary
-# end of a window, and it must be reported as such: a run that stopped because the
-# allowance ran out looks nothing like one that stopped because the account was
-# about to be charged. Providers spell it both ways -- Codex in prose, Claude in a
-# structured snake_case `stop_reason` -- so both spellings are matched.
-#
-# The prose spellings are the fragile half of this list. A 2026-09-01 run ended on
-# "You've hit your monthly spend limit ... your weekly limit resets 12pm", which
-# matched nothing here, so exhaustion was labelled a malformed worker result and the
-# run stopped instead of waiting out the window. Match the shapes a limit message
-# actually takes, not one vendor's current phrasing.
+# end of a window, and it must be reported as such. Providers spell it both ways --
+# Codex in prose, Claude in a structured snake_case `stop_reason` -- so both
+# spellings are matched. Bare "limit reached" was dropped: it matched context-window
+# and output-size errors and sent the supervisor to sleep on a message that had
+# nothing to do with the allowance.
 QUOTA_EXHAUSTED_TERMS = (
     "usage limit",
     "usage_limit",
@@ -52,9 +62,23 @@ QUOTA_EXHAUSTED_TERMS = (
     "spend limit",
     "weekly limit",
     "monthly limit",
-    "limit reached",
     "limit resets",
 )
+
+
+def classify_refusal(text: str) -> tuple[bool, bool]:
+    """(billing_error, quota_exhausted) for a diagnostics blob.
+
+    Hard billing terms fail closed regardless. A window signal wins over soft
+    (upsell) billing vocabulary, so "hit your usage limit — enable auto top-up"
+    pauses instead of stopping as a charging risk that does not exist.
+    """
+    lowered = text.lower()
+    hard = any(term in lowered for term in BILLING_HARD_TERMS)
+    soft = any(term in lowered for term in BILLING_SOFT_TERMS)
+    quota = any(term in lowered for term in QUOTA_EXHAUSTED_TERMS)
+    billing = hard or (soft and not quota)
+    return billing, quota
 
 
 def _find_git_root(path: Path) -> Path | None:
@@ -65,7 +89,9 @@ def _find_git_root(path: Path) -> Path | None:
     return None
 
 
-def _tree_snapshot(root: Path, source: SourceSettings | None = None) -> dict[str, tuple[int, int]]:
+def _tree_snapshot(
+    root: Path, source: SourceSettings | None = None, ignore_fragment: str | None = None
+) -> dict[str, tuple[int, int]]:
     """Fingerprint the files a run is allowed to read.
 
     The snapshot is scoped to the indexer's own allowlist. Watching the whole
@@ -84,6 +110,11 @@ def _tree_snapshot(root: Path, source: SourceSettings | None = None) -> dict[str
             extensions=source.extensions,
             exclude_fragments=source.exclude_fragments,
         ):
+            # The Claude worker records its own transcript under the user's session
+            # root, in a directory named after its cwd -- which carries this run's
+            # name. Watching that would flag every task as source movement.
+            if ignore_fragment and ignore_fragment in str(path):
+                continue
             try:
                 stat = path.stat()
             except OSError:
@@ -135,6 +166,10 @@ def _language_rule(output_language: str) -> str:
             "technical terms may stay in English where that is how practitioners write "
             "them. Section headings follow the same language as the body."
         )
+    if not re.fullmatch(r"[\w\s·-]{1,40}", output_language):
+        # A language name is words, not instructions. Anything else falls back
+        # to following the sources rather than becoming a rule in the prompt.
+        return _language_rule("auto")
     return (
         f"- Write the artifact in {output_language}, whatever language the sources use. "
         "Keep identifiers, paths, code, and quoted source text exactly as they appear."
@@ -324,28 +359,47 @@ def _supervise_worker(
 CLAUDE_READ_ONLY_TOOLS = "Read,Grep,Glob"
 
 
-def _worker_can_write(config: AppConfig) -> bool:
-    """Could this worker have written to a source root at all?
+TEMP_ROOTS = tuple(
+    Path(p).resolve(strict=False)
+    # Naming the temp family is the point: sources that live there are treated as
+    # writable by every sandbox, never used as a place to write.
+    for p in ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders", tempfile.gettempdir())  # noqa: S108
+)
+
+
+def _under_temp(path: str) -> bool:
+    try:
+        resolved = Path(path).resolve(strict=False)
+    except OSError:
+        return False
+    return any(resolved == root or resolved.is_relative_to(root) for root in TEMP_ROOTS)
+
+
+def _worker_can_write(config: AppConfig, path: str | None = None) -> bool:
+    """Could this worker have written *that* path?
 
     The snapshot diff observes that an allowlisted file moved. It cannot say who
     moved it, and on the sources this tool is built to read -- agent session logs,
-    active project directories -- something else almost always did: another agent
-    session appends to its own transcript, a sync client touches an mtime, the
-    user saves a file. Two of three runs on 2026-09-01 stopped on exactly that,
-    discarding completed work and leaving the window unburned.
+    active project directories -- something else almost always did. Attribution
+    therefore comes from capability, per path:
 
-    Attribution comes from capability, not from the diff. A Claude worker holds
-    Read, Grep and Glob and nothing else; a Codex worker in safe mode runs under a
-    read-only sandbox. Neither can write anywhere, so neither can be the cause.
-    Only `balanced` mode hands Codex a writable sandbox, and there an observed
-    mutation is attributable and still fails closed.
+    - A Claude worker holds Read, Grep and Glob (a closed --tools allowlist, under
+      --restricted) and has no write tool at all.
+    - A Codex worker in safe mode runs under a read-only sandbox; in balanced mode
+      under workspace-write pinned to the staging directory. Both sandboxes are
+      known to leave the temp directory family writable, so a source root that
+      lives under it is treated as writable by any Codex worker.
+    - Only `balanced` mode is blamed for movement elsewhere: it is the one mode
+      that holds a write-capable sandbox, and the diff stays its tripwire.
 
-    This does not replace the boundary, it stops guessing about it: the boundary is
-    enforced by the absent tools and the sandbox, and an attempt to reach past it
-    is caught directly by `permission_denials`.
+    This narrows the blame, it does not remove the boundary: the tools and the
+    sandbox enforce it, and an attempt to reach past it is caught directly by
+    `permission_denials`.
     """
     if config.execution.provider == "claude":
         return False
+    if path is not None and _under_temp(path):
+        return True
     return config.run.mode != "safe"
 
 
@@ -367,6 +421,11 @@ def _worker_command(config: AppConfig, prompt: str, staging: Path, source_roots:
             # load-bearing flag and fails closed if any is missing
             # (config.assert_claude_cli_contract).
             "--safe-mode",
+            # --restricted removes the code-running tools and WebFetch unless --tools
+            # names them, and ignores user/project settings. --safe-mode alone leaves
+            # built-in tools in place (its help text says so); the read-only guarantee
+            # is --tools as a closed allowlist, with --restricted as the second lock.
+            "--restricted",
             "--strict-mcp-config",
             "--mcp-config",
             '{"mcpServers":{}}',
@@ -560,13 +619,11 @@ def _burn_from_events(events_path: Path, provider: str) -> dict[str, Any]:
 
 
 def _contains_billing_error(text: str) -> bool:
-    lowered = text.lower()
-    return any(term in lowered for term in BILLING_ERROR_TERMS)
+    return classify_refusal(text)[0]
 
 
 def _contains_quota_exhaustion(text: str) -> bool:
-    lowered = text.lower()
-    return any(term in lowered for term in QUOTA_EXHAUSTED_TERMS)
+    return classify_refusal(text)[1]
 
 
 def _worker_environment(source: Any) -> tuple[dict[str, str], list[str]]:
@@ -635,7 +692,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
     source_roots = [Path(value).resolve() for value in task["allowed_read_roots"]]
     source_by_root = {source.root.resolve(): source for source in config.sources}
     before = {
-        str(root): _tree_snapshot(root, source_by_root.get(root)) for root in source_roots
+        str(root): _tree_snapshot(root, source_by_root.get(root), run_dir.name) for root in source_roots
     }
 
     command = _worker_command(config, prompt, staging, source_roots)
@@ -762,12 +819,12 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
             raise
 
     after = {
-        str(root): _tree_snapshot(root, source_by_root.get(root)) for root in source_roots
+        str(root): _tree_snapshot(root, source_by_root.get(root), run_dir.name) for root in source_roots
     }
     changed_paths = _snapshot_diff(before, after)
     source_changed = bool(changed_paths)
     # Observed movement is reported either way; only an attributable write fails.
-    source_write_attributable = source_changed and _worker_can_write(config)
+    source_write_attributable = any(_worker_can_write(config, path) for path in changed_paths)
     if config.execution.provider == "claude":
         artifact = _claude_extract(events_path)
     else:
