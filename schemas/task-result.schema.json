@@ -144,6 +144,10 @@
     },
     "finished_at": {
       "type": "string"
+    },
+    "quota_throttle_only": {
+      "type": "boolean",
+      "description": "The quota match was carried by a rate-limit word alone, with no window marker: a throttle, worth a short back-off rather than a full replenishment probe."
     }
   }
 }

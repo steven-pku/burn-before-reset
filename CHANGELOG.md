@@ -22,6 +22,13 @@ record of what has actually been proven.
   stamps git-dirty from the dirty files, survives corrupt sibling ledgers, rejects
   whitespace artifacts and path traversal, and folds sweep membership into the
   sweep id; the Markdown report no longer calls exhausted quota "unused window".
+- Re-review of that adoption by a Codex Sol seat: hard billing terms cover a failing
+  charge path beside a window word; a bare rate limit backs off briefly instead of
+  sleeping a full probe interval; the transcript exclusion is shape-bound and
+  Claude-only; language detection uses a kana/Hangul share rather than a single-
+  character veto; git-dirty identity is a fingerprint of the whole dirty set; sweep
+  identity is a membership digest; mis-shaped sibling ledgers are skipped; the
+  call-cap stop keeps its unused-window line.
 
 
 ## [0.3.0] — 2026-09-02

@@ -640,8 +640,11 @@ Two real defects were caught by the matrix before anyone outside saw the page:
 Two independent seats, same brief, same commit; their findings overlapped on four
 points and each added what the other missed. Every finding below was verified
 against the tree and the installed CLI before adoption. The regression module is
-`tests/test_audit_round4.py`: 17 cases, of which 14 fail and 3 error against `8bcc5d0`
-(the errors are the three changed signatures) and all pass after the fixes.
+`tests/test_audit_round4.py`. It carries an in-module shim so it collects on the audited
+tree; run there (`git worktree add … 8bcc5d0`, copy the module in, `python -m unittest
+tests.test_audit_round4 -v`) it reports 16 failures and 7 errors of 23 cases — the two
+green ones are guards (hard billing terms still fail closed; soft billing alone is still
+a fault) that the old tree already satisfied. All 23 pass after the fixes.
 
 ### Adopted
 
@@ -671,8 +674,8 @@ field the runner never emits (Kimi); `_merged_tasks` now drops ids that fail
 
 | Check | Result | Evidence |
 |---|---|---|
-| Unit/integration suite | PASS | 145 tests. |
-| Round-4 module against `8bcc5d0` | PASS (red) | 14 failures + 3 errors of 17; all green after. |
+| Unit/integration suite | PASS | 151 tests. |
+| Round-4 module against `8bcc5d0` | PASS (red) | 16 failures + 7 errors of 23 (two guards green by design); all green after. Reproduction command above. |
 | ruff | PASS | Clean. |
 | `claude --help` re-probe | PASS | `--restricted` advertised on the installed CLI; preflight would refuse a CLI without it. |
 
@@ -685,3 +688,65 @@ Kimi's transcript-noise hypothesis was confirmed empirically within minutes and
 its sibling-ledger robustness list was the most complete. The overlap between the
 two on billing precedence, git-dirty stamps and `auto` language is what makes the
 adoption confident.
+
+### Re-review of the adoption · Codex Sol seat · 2026-09-02
+
+The adoption itself was put to a third seat (`codex exec`, read-only, GPT-5 family — the
+seat reported its exact version as uncertain) with the brief "audit the author's
+adoption, not the repository". Verdict 🔴, thirteen findings. Verified against the tree:
+
+**Adopted**
+
+- The red/green claim was not reproducible as written: the module imported a symbol
+  the audited tree lacks, so it could not even collect there. The shim now lives in the
+  module and the exact reproduction is recorded above.
+- A20: `soft and not quota` let a *failing* charge path pause when the message also
+  carried a window word ("subscription payment failed … usage limit"). Hard terms now
+  include `payment failed`, `credits exhausted`, `top-up failed`, and tests cover the
+  collision. A bare rate-limit word is classified `throttle_only` and backs off for at
+  most two minutes instead of a full probe interval — the deferred Kimi item, now done.
+- A22: the transcript exclusion matched any path containing the run name, for every
+  provider. It now matches only a path component carrying both the run name and
+  `staging`, and only under the Claude worker; a source file that merely mentions the
+  run name stays watched (tested).
+- A24: one kana or Hangul character vetoed Chinese for a whole report; the veto is now
+  a share (over a twentieth of letters). The language-name check accepted a sentence
+  without punctuation; it now allows at most three words of at most sixteen characters.
+- A26: the newest dirty-file mtime could not represent a deletion, an edit to a file
+  that was not the newest, or an untracked directory. The git source now carries a
+  `fingerprint` of the whole `--porcelain --untracked-files=all` status, folded into the
+  task id, so any change to the dirty set is a new task.
+- A27: sibling ledgers were guarded only against parse errors; a well-formed but
+  mis-shaped one (`completed: 1`, `tasks: null`) still raised. The whole sibling is now
+  processed under one guard. A sweep's identity was its member *count*; it is now a
+  digest of its membership, so a swapped member is a different sweep.
+- A28: the unused-window line was also suppressed for `worker_call_cap`; the cap is the
+  user's own knob and hours left behind it are a diagnosis. Only `quota_exhausted`
+  suppresses it.
+- SECURITY.md said read-only sandboxes are "known" to leave the temp family writable;
+  the sandbox was never probed. Reworded as a fail-closed assumption.
+- STATUS.md counted two declined items; there were three.
+
+**Partially adopted**
+
+- A23: the `/var/folders → /private/var/folders` alias was handled but not tested;
+  a test now pins both spellings. The seat's remark that CI runners may not exercise it
+  stands — the resolution is static and covered by the test on every platform.
+- A25: any mtime difference counts as movement, which the seat notes still misses a
+  same-second edit and re-does work on a metadata touch. True; a content hash of cited
+  sources is the real fix and is recorded as the next step rather than bolted on here.
+  Naive stamps are assumed local time — a ledger carried across time zones can compare
+  wrong; recorded as a limitation.
+
+**Declined**
+
+- Attribute `balanced` per path like `safe`. The seat is right that mode does not imply
+  the ability to write a given source path. It stays fail-closed on purpose: `balanced`
+  is the one mode with a write-capable sandbox and the least real-run exposure, and the
+  diff is its only vendor-independent tripwire. Recorded as a judgment, not a fact.
+
+**Seat performance.** Thirteen findings, every one with a file:line, three of them
+material (the unreproducible red claim, the dirty-set identity, the mis-shaped sibling
+guard) and none a false positive. The seat also read `claude --help` itself and confirmed
+the `--restricted` / `--tools` interaction. Keep.
+

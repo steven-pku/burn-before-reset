@@ -37,7 +37,10 @@ BILLING_HARD_TERMS = (
     "billing error",
     "billing details",
     "payment method",
+    "payment failed",
     "insufficient funds",
+    "credits exhausted",
+    "top-up failed",
 )
 BILLING_SOFT_TERMS = (
     "billing",
@@ -66,19 +69,27 @@ QUOTA_EXHAUSTED_TERMS = (
 )
 
 
-def classify_refusal(text: str) -> tuple[bool, bool]:
-    """(billing_error, quota_exhausted) for a diagnostics blob.
+# A bare rate-limit word with no window marker is a throttle, not a closed
+# allowance: worth a short back-off, not a full replenishment probe.
+WINDOW_MARKER_TERMS = tuple(t for t in QUOTA_EXHAUSTED_TERMS if "rate" not in t)
 
-    Hard billing terms fail closed regardless. A window signal wins over soft
-    (upsell) billing vocabulary, so "hit your usage limit — enable auto top-up"
-    pauses instead of stopping as a charging risk that does not exist.
+
+def classify_refusal(text: str) -> tuple[bool, bool, bool]:
+    """(billing_error, quota_exhausted, throttle_only) for a diagnostics blob.
+
+    Hard billing terms -- a charge path in use or failing -- fail closed regardless
+    of anything else in the message. A window signal wins over soft (upsell)
+    vocabulary, so "hit your usage limit — enable auto top-up" pauses instead of
+    stopping as a charging risk that does not exist. `throttle_only` marks a
+    quota match carried by a rate-limit word alone, with no window marker.
     """
     lowered = text.lower()
     hard = any(term in lowered for term in BILLING_HARD_TERMS)
     soft = any(term in lowered for term in BILLING_SOFT_TERMS)
     quota = any(term in lowered for term in QUOTA_EXHAUSTED_TERMS)
+    window = any(term in lowered for term in WINDOW_MARKER_TERMS)
     billing = hard or (soft and not quota)
-    return billing, quota
+    return billing, quota, quota and not window
 
 
 def _find_git_root(path: Path) -> Path | None:
@@ -111,9 +122,13 @@ def _tree_snapshot(
             exclude_fragments=source.exclude_fragments,
         ):
             # The Claude worker records its own transcript under the user's session
-            # root, in a directory named after its cwd -- which carries this run's
-            # name. Watching that would flag every task as source movement.
-            if ignore_fragment and ignore_fragment in str(path):
+            # root, in a directory named after its cwd: the staging path, which
+            # carries this run's name. Only that shape is skipped -- a directory
+            # component holding both the run name and "staging" -- so an ordinary
+            # source file that merely mentions the run name is still watched.
+            if ignore_fragment and any(
+                ignore_fragment in part and "staging" in part for part in path.parts
+            ):
                 continue
             try:
                 stat = path.stat()
@@ -166,9 +181,15 @@ def _language_rule(output_language: str) -> str:
             "technical terms may stay in English where that is how practitioners write "
             "them. Section headings follow the same language as the body."
         )
-    if not re.fullmatch(r"[\w\s·-]{1,40}", output_language):
-        # A language name is words, not instructions. Anything else falls back
-        # to following the sources rather than becoming a rule in the prompt.
+    words = output_language.split()
+    if (
+        not re.fullmatch(r"[\w\s·-]{1,24}", output_language)
+        or len(words) > 3
+        or any(len(w) > 16 for w in words)
+    ):
+        # A language name is at most a few words ("Brazilian Portuguese",
+        # "繁體中文"), never a sentence. Anything longer falls back to following
+        # the sources rather than becoming a rule in the prompt.
         return _language_rule("auto")
     return (
         f"- Write the artifact in {output_language}, whatever language the sources use. "
@@ -851,8 +872,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
         diagnostic_text, worker_errors = _diagnostic_scan(events_path)
     burn = _burn_from_events(events_path, config.execution.provider)
     scanned = stderr_text + "\n" + diagnostic_text
-    billing_error = _contains_billing_error(scanned)
-    quota_exhausted = _contains_quota_exhaustion(scanned)
+    billing_error, quota_exhausted, quota_throttle_only = classify_refusal(scanned)
     stop_now = (run_dir / "STOP_NOW").exists()
     success = (
         supervision["return_code"] == 0
@@ -893,6 +913,7 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
         "worker_errors": worker_errors[:MAX_REPORTED_WORKER_ERRORS],
         "billing_error": billing_error,
         "quota_exhausted": quota_exhausted,
+        "quota_throttle_only": quota_throttle_only,
         "burn": burn,
         "deadline_stop": stop_now,
         "artifact": str(artifact_path.relative_to(run_dir)) if success else None,

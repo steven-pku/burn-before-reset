@@ -21,6 +21,9 @@ def _clean_title(title: str) -> str:
 
 def _task_id(record: SourceRef) -> str:
     material = f"{record.source_type}\0{record.root}\0{record.path}\0{','.join(record.signals)}"
+    if record.fingerprint:
+        # A git source's identity is its dirty set; the path is always ".".
+        material += f"\0{record.fingerprint}"
     return "task-" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:12]
 
 
@@ -287,6 +290,7 @@ def _sweep_tasks(records: list[SourceRef], run_dir: Path, now: datetime) -> list
         # datetime max, not string max: mixed offsets would otherwise sort wrong.
         newest = max(members, key=lambda m: _ref_time(m.modified_at) or datetime.min.replace(tzinfo=UTC)).modified_at
         signals = sorted({signal for member in members for signal in member.signals})
+        membership = hashlib.sha256("\n".join(sorted(m.path for m in members)).encode("utf-8")).hexdigest()[:16]
         reference = SourceRef(
             source_type="markdown",
             root=root,
@@ -295,10 +299,12 @@ def _sweep_tasks(records: list[SourceRef], run_dir: Path, now: datetime) -> list
             title=f"{project} (whole project)",
             signals=tuple(signals),
             snippets=(f"{len(members)} files in this project carry unfinished-work markers",),
+            fingerprint=membership,
         )
-        # Membership is part of the identity: a project that gained or lost marked
-        # files is a different sweep, so an earlier answer cannot suppress it.
-        task_id = "sweep-" + hashlib.sha256(f"{root}\0{project}\0{len(members)}".encode()).hexdigest()[:12]
+        # Membership is part of the identity: a project whose set of marked files
+        # changed -- gained, lost, or swapped one for another -- is a different
+        # sweep, so an earlier answer cannot suppress it. A count would miss swaps.
+        task_id = "sweep-" + hashlib.sha256(f"{root}\0{project}\0{membership}".encode()).hexdigest()[:12]
         tasks.append(
             TaskSpec(
                 id=task_id,
@@ -471,16 +477,22 @@ def prior_completions(config: AppConfig, current_run_dir: Path) -> dict[str, dic
         if run_dir.resolve() == current_run_dir.resolve():
             continue
         try:
-            state = read_json(run_dir / "RUN_STATE.json")
-        except (OSError, ValueError):
-            # A truncated or sync-conflicted sibling must not brick every future
-            # plan; it simply contributes nothing.
+            _absorb_sibling(run_dir, done)
+        except Exception:  # noqa: S112 — a sibling ledger is untrusted input; skipping is the design
+            # Truncated, sync-conflicted, or merely mis-shaped (`completed: 1`,
+            # `tasks: null`): a sibling must never brick every future plan.
             continue
+    return done
+
+
+def _absorb_sibling(run_dir: Path, done: dict[str, dict[str, Any]]) -> None:
+    if True:
+        state = read_json(run_dir / "RUN_STATE.json")
         if not isinstance(state, dict):
-            continue
+            return
         completed = {task_id for task_id in (state.get("completed") or []) if isinstance(task_id, str)}
         if not completed:
-            continue
+            return
         for queue_path in [run_dir / "QUEUE.json", *sorted(run_dir.glob("QUEUE-r*.json"))]:
             try:
                 queue = read_json(queue_path)
@@ -515,7 +527,6 @@ def prior_completions(config: AppConfig, current_run_dir: Path) -> dict[str, dic
                         "artifact": str(artifact),
                         "title": task.get("title", task_id),
                     }
-    return done
 
 
 def _already_answered(task: TaskSpec, prior: dict[str, dict[str, Any]]) -> dict[str, Any] | None:

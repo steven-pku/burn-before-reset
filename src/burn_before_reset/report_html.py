@@ -174,11 +174,14 @@ def _chrome_language(requested: str, sample_text: str) -> str:
         return "zh"
     if lowered not in {"auto", "source", ""}:
         return "en"
-    # auto: Chinese only when the sample is Han-heavy and carries no kana or Hangul.
-    if _NOT_CHINESE.search(sample_text):
-        return "en"
+    # auto: Chinese when the sample is Han-heavy and kana/Hangul are rare. One
+    # Japanese term inside a Chinese report is not evidence of a Japanese reader;
+    # a text that is a twentieth kana or Hangul is not Chinese.
     relevant = [ch for ch in sample_text if ch.isalpha()]
     if not relevant:
+        return "en"
+    other = sum(1 for ch in relevant if _NOT_CHINESE.match(ch)) / len(relevant)
+    if other > 0.05:
         return "en"
     ratio = sum(1 for ch in relevant if _HAN.match(ch)) / len(relevant)
     return "zh" if ratio > 0.2 else "en"

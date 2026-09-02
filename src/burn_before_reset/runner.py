@@ -159,7 +159,19 @@ def _failure_stop_reason(result: dict[str, Any]) -> str:
     return "worker_failed"
 
 
-def _wait_for_replenishment(config: AppConfig, run_dir: Path, state: dict[str, Any], task_id: str) -> bool:
+THROTTLE_PROBE_MINUTES = 2.0
+
+
+def _probe_minutes(config: AppConfig, throttle_only: bool) -> float:
+    """A bare rate limit is a throttle: back off briefly, not a whole probe interval."""
+    if throttle_only:
+        return min(config.run.quota_replenish_probe_minutes, THROTTLE_PROBE_MINUTES)
+    return config.run.quota_replenish_probe_minutes
+
+
+def _wait_for_replenishment(
+    config: AppConfig, run_dir: Path, state: dict[str, Any], task_id: str, *, throttle_only: bool = False
+) -> bool:
     """Sleep one probe interval, bounded by the hard stop. True = worth retrying.
 
     Subscription allowances replenish on an inner cycle whose exact boundary the
@@ -175,14 +187,15 @@ def _wait_for_replenishment(config: AppConfig, run_dir: Path, state: dict[str, A
         "quota.waiting",
         task_id=task_id,
         wait_cycle=state["quota_wait_cycles"],
-        probe_minutes=config.run.quota_replenish_probe_minutes,
+        probe_minutes=_probe_minutes(config, throttle_only),
+        throttle_only=throttle_only,
     )
     _checkpoint(
         run_dir / "CHECKPOINTS.md",
         f"## {datetime.now().astimezone().isoformat(timespec='seconds')} · {task_id} · "
         f"quota exhausted — waiting for replenishment (cycle {state['quota_wait_cycles']})",
     )
-    deadline = time.monotonic() + config.run.quota_replenish_probe_minutes * 60
+    deadline = time.monotonic() + _probe_minutes(config, throttle_only) * 60
     while time.monotonic() < deadline:
         if _stop_requested:
             return False
@@ -307,7 +320,7 @@ def _work_queue(
                 # sleeps one probe interval, and the same task is retried. A retry
                 # against a still-closed window fails closed again at near-zero cost.
                 state["task_status"][task_id] = "waiting_quota"
-                if _wait_for_replenishment(config, run_dir, state, task_id):
+                if _wait_for_replenishment(config, run_dir, state, task_id, throttle_only=bool(result.get("quota_throttle_only"))):
                     continue  # retry the same task
                 state["task_status"][task_id] = "failed"
                 state["failed"].append(task_id)

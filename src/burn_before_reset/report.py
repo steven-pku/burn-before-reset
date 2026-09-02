@@ -40,9 +40,10 @@ def write_morning_report(run_dir: Path, state: dict[str, Any], queue: dict[str, 
             )
         left = float(pace.get("hours_remaining", 0) or 0)
         # Clock left over only means something when the clock was the limit. When
-        # the allowance ran out first, or the per-run call cap closed the night,
-        # the remaining hours were never spendable and must not read as waste.
-        if left > 0.5 and state.get("stop_reason") not in {"quota_exhausted", "worker_call_cap"}:
+        # the allowance ran out first the remaining hours were never spendable and
+        # must not read as waste. A call-cap stop is different: the cap is the
+        # user's own knob, and hours left behind it are a real diagnosis.
+        if left > 0.5 and state.get("stop_reason") != "quota_exhausted":
             # Time left on the clock at the moment the run stopped. The allowance
             # expires either way, so unused hours are unconverted quota, not safety.
             lines.append(f"- **{left:.1f}h of the window were left unused** — see the stop reason above for why")

@@ -42,7 +42,7 @@ Report security issues privately to the maintainer before public disclosure. Do 
 
 ## Source movement and attribution (since 0.3.0)
 
-- A file that moved inside an allowlisted root is reported, always. It stops the run only when the worker that ran *could* have written that path: a `balanced` Codex worker anywhere, or any Codex worker for a source root that lives under the temp-directory family (`/tmp`, `/var/folders`, `$TMPDIR`), which read-only sandboxes are known to leave writable. A Claude worker holds no write tool, so movement under its run is attributed to something else on the machine and named in the report.
+- A file that moved inside an allowlisted root is reported, always. It stops the run only when the worker that ran *could* have written that path: a `balanced` Codex worker anywhere, or any Codex worker for a source root that lives under the temp-directory family (`/tmp`, `/var/folders`, `$TMPDIR`). Read-only sandboxes commonly leave that family writable; this project has not probed the installed sandbox, so it treats those roots as writable to fail closed rather than to claim a fact. A Claude worker holds no write tool, so movement under its run is attributed to something else on the machine and named in the report.
 - The Claude worker writes its own transcript under the user's session root, in a directory named after its cwd; that directory carries the run's name and is excluded from the snapshot, so a `claude_sessions` source does not report the run's own footprint as movement.
 - Session roots and live project trees are written by other processes by design. Read the **Allowlisted files that moved** list with that in mind; it is the one place a real boundary violation would surface.
 

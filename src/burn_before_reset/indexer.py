@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -75,7 +76,7 @@ def _git_status(source: SourceSettings) -> SourceRef | None:
         # Without it, git rewrites `.git/index` and changes its mtime, which is a
         # write inside a source root the planner promises never to modify.
         result = subprocess.run(
-            [resolve_executable("git"), "--no-optional-locks", "-C", str(source.root), "status", "--short"],
+            [resolve_executable("git"), "--no-optional-locks", "-C", str(source.root), "status", "--porcelain", "--untracked-files=all"],
             check=False,
             capture_output=True,
             text=True,
@@ -102,6 +103,10 @@ def _git_status(source: SourceSettings) -> SourceRef | None:
             continue
     newest = max(stamps) if stamps else source.root.stat().st_mtime
     modified = datetime.fromtimestamp(newest).astimezone().isoformat(timespec="seconds")
+    # The dirty *set* is the identity: a deletion, an edit to a file that is not
+    # the newest one, or a new untracked path all change it while the newest
+    # mtime may not. De-duplication compares this alongside the stamp.
+    fingerprint = hashlib.sha256("\n".join(sorted(lines)).encode("utf-8")).hexdigest()[:16]
     return SourceRef(
         source_type="git",
         root=str(source.root),
@@ -110,6 +115,7 @@ def _git_status(source: SourceSettings) -> SourceRef | None:
         title=source.root.name,
         signals=("git-dirty",),
         snippets=tuple(_redact(line, source.root) for line in lines[:5]),
+        fingerprint=fingerprint,
     )
 
 

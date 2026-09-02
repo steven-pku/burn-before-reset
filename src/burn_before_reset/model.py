@@ -13,6 +13,9 @@ class SourceRef:
     signals: tuple[str, ...] = ()
     snippets: tuple[str, ...] = ()
     title: str = ""
+    # Identity of the content behind the reference where mtime cannot carry it:
+    # a git source's whole dirty set, a sweep's membership. Empty when unused.
+    fingerprint: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
