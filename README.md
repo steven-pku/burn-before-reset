@@ -30,9 +30,9 @@ The page is self-contained (no network requests), speaks the user's language (`r
 
 **Public candidate. Not proven safe for unattended use.**
 
-Lifecycle is `candidate`. Three real Codex tasks have run end to end through the product adapter across two source types, and the deadline guard has been observed killing a live Codex process group, so `PROMOTION_GATE` is satisfied at 3 of 3. Nothing here is installed globally, and `verified` is still not claimed: that also requires a decision about installation targets.
+Lifecycle is `candidate`. `PROMOTION_GATE` is satisfied at 3 of 3: real Codex tasks have run end to end through the product adapter across two source types, and the deadline guard has been observed killing a live Codex process group. Since then the tool has done the thing it exists to do once, for real: an unattended overnight autopilot run against a genuinely expiring weekly allowance — 25 tasks completed, 27 artifacts, $71.38, and the allowance driven to the provider's own refusal. That night surfaced four defects, each repaired with a regression test that fails against the previous behaviour. Nothing here is installed globally, and `verified` is still not claimed: that also requires a decision about installation targets.
 
-Read that as: the safety machinery is tested, the happy path has been exercised, and the hard stop has actually fired once against a real process — all on small, non-sensitive sources in `safe` mode, under supervision. `balanced` mode has never run for real. The default path is plan-only, and it should stay that way until you have watched `--execute` behave on your own sources. See [VALIDATION.md](VALIDATION.md) for the full gate ledger and the risks that remain open.
+Read that as: the safety machinery is tested, the happy path has been exercised at overnight scale, and the hard stop has actually fired against a real process — on one machine, one user's sources, almost entirely in `safe` mode. `balanced` mode has run for real exactly once (two tasks, sources byte-identical afterwards) and remains the least-exercised path. The default path is plan-only, and it should stay that way until you have watched `--execute` behave on your own sources. See [VALIDATION.md](VALIDATION.md) for the full gate ledger and the risks that remain open.
 
 ## Safety model
 
@@ -44,7 +44,7 @@ Read that as: the safety machinery is tested, the happy path has been exercised,
 - Billing and auth failures are read from the Worker's diagnostics, never from the artifact it wrote. An artifact that merely discusses pricing or rate limits is still delivered.
 - Planner never modifies source roots, and reads Git status without touching the repository index.
 - No delete, push, merge, deploy, publish, message, purchase, credential change, provider fallback, or Cloud Task.
-- A supervised watchdog controls the local worker process group; guard loss or unconfirmed shutdown fails the task.
+- A supervised watchdog controls the local Worker process group; guard loss or unconfirmed shutdown fails the task.
 - Each round's queue freezes before it is worked and is never added to; a drained queue with time left triggers a fresh frozen round, and a round that finds nothing ends the run instead of inventing work.
 - Worker prompts omit source snippets and treat locator metadata as untrusted data, not instructions.
 - Rehashed queues still reject unsafe task IDs and deliverable traversal; runtime task roots are rebound to configured sources and the current run directory.
@@ -103,7 +103,7 @@ A `1` from a deadline stop means "ran out of time as designed", so treat it as a
 - Deterministic, allowlisted Markdown/session/repository indexing.
 - Candidate extraction and value/risk scoring.
 - Immutable frozen queue and atomic run state.
-- Sequential local worker adapter — Codex CLI or Claude Code — with full event capture.
+- Sequential local Worker adapter — Codex CLI or Claude Code — with full event capture.
 - Supervised deadline watchdog, confirmed-stop receipts, checkpoints, stop reason, and Morning Report even on ordinary Worker exceptions.
 - Dry-run and fake-worker integration tests.
 
@@ -144,13 +144,16 @@ containing `../..`; the CLI and the tests are unaffected.
 The Skill file itself is portable — plain `SKILL.md` with `name` and `description`
 frontmatter — and both Codex CLI and Claude Code discover it from this checkout.
 
-**Two worker adapters ship.** `execution.provider = "codex"` shells out to
+**Two Worker adapters ship.** `execution.provider = "codex"` shells out to
 `codex exec` under its sandbox (`safe` or `balanced`). `execution.provider = "claude"`
-shells out to Claude Code headless, `safe` mode only: the worker is launched with
-`--safe-mode`, an empty strict MCP configuration, and nothing beyond Read/Grep/Glob —
-read-only because the write tools are absent, not merely denied. `--safe-mode` is not
-in the published CLI reference, so preflight probes `claude --help` for it and every
-other load-bearing flag, and refuses the run if any is missing. Running out of
+shells out to Claude Code headless, `safe` mode only: the Worker is launched with
+`--tools Read,Grep,Glob` as a closed allowlist, `--restricted` (the documented flag
+that removes the code-running tools and WebFetch), `--safe-mode` (which disables user
+customisations — without it a probe reached a connected cloud-storage write tool), and
+an empty strict MCP configuration — read-only because the write tools are absent, not
+merely denied. `--safe-mode` is not in the published CLI reference, so preflight probes
+`claude --help` for it and every other load-bearing flag, and refuses the run if any
+is missing. Running out of
 allowance mid-run ends the run as `quota_exhausted`, an ordinary stop distinct from
 `billing_or_auth_error`. Other agents can still *discover* the Skill without being able
 to *execute* it — read the boundary before assuming "works with my agent" means "runs

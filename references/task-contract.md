@@ -41,6 +41,12 @@ and this week's blocker are not the same opportunity.
 
 `token_fitness` only breaks ties; it must not rescue a low-value task. Reject risk above the configured maximum, human dependency above the configured maximum, or scores below the threshold.
 
+The formula cannot go below 24 for a file record (one `next-step` marker, no recency,
+sprawling snippets) and reaches 63 at the top; the first real overnight corpus ranged
+45–59. `task_policy.minimum_score` defaults to 30, which drops only the stale,
+single-weak-marker tail. A threshold below 24 filters nothing — 12 was the default for
+a month and never removed a candidate.
+
 ## Freeze rule
 
 Write `QUEUE.json` once with `frozen: true` and its content hash. A run may update task status only in `RUN_STATE.json`; it must not add tasks to the frozen queue. Queue exhaustion is a normal stop condition.

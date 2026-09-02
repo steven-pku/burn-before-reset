@@ -45,7 +45,10 @@ sigint_grace_seconds = 20
 sigterm_grace_seconds = 10
 
 [task_policy]
-minimum_score = 12
+# The score formula (references/task-contract.md) bottoms out at 24 — a stale file
+# carrying one weak marker — and a real overnight corpus ranged 45–59. 30 drops only
+# that stale tail. The earlier default of 12 sat below the floor and never filtered.
+minimum_score = 30
 maximum_risk = 2
 maximum_human_dependency = 1
 max_candidates = 50

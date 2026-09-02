@@ -14,3 +14,6 @@ config.local.toml
 ci-source/
 ci-output/
 ci.toml
+
+# Local promotional material (X posts, drafts, renders) — never published with the repository
+promo/

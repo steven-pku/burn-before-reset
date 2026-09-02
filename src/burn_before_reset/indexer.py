@@ -37,9 +37,16 @@ def _title(text: str, fallback: str) -> str:
     return (heading.group(1).strip() if heading else fallback)[:120]
 
 
-def _read_bounded(path: Path, maximum: int) -> str:
+def _read_bounded(path: Path, maximum: int) -> tuple[str, bytes]:
     with path.open("rb") as handle:
-        return handle.read(maximum).decode("utf-8", errors="replace")
+        raw = handle.read(maximum)
+    return raw.decode("utf-8", errors="replace"), raw
+
+
+def _content_digest(raw: bytes, size: int) -> str:
+    # Size first: the indexer reads a bounded prefix, so an append past the bound
+    # would otherwise leave the digest unchanged.
+    return hashlib.sha256(f"{size}\0".encode("ascii") + raw).hexdigest()[:16]
 
 
 def _is_codex_session(text: str) -> bool:
@@ -52,6 +59,23 @@ def _is_codex_session(text: str) -> bool:
         isinstance(record, dict)
         and record.get("type") == "session_meta"
         and isinstance(record.get("payload"), dict)
+    )
+
+
+def _is_claude_session(text: str) -> bool:
+    """A Claude Code transcript: JSONL whose first record is a typed entry bound to a
+    session. The shape is observed, not published — every transcript seen so far opens
+    with a string `type` and a `sessionId`, `cwd` or `uuid`; a data export or a log that
+    merely ends in .jsonl does not, and must not be read as a session."""
+    first = text.splitlines()[0] if text.splitlines() else ""
+    try:
+        record = json.loads(first)
+    except json.JSONDecodeError:
+        return False
+    return (
+        isinstance(record, dict)
+        and isinstance(record.get("type"), str)
+        and any(key in record for key in ("sessionId", "cwd", "uuid"))
     )
 
 
@@ -130,11 +154,13 @@ def index_source(source: SourceSettings) -> list[SourceRef]:
         exclude_fragments=source.exclude_fragments,
     ):
         try:
-            text = _read_bounded(path, source.max_file_bytes)
+            text, raw = _read_bounded(path, source.max_file_bytes)
             stat = path.stat()
         except (OSError, UnicodeError):
             continue
         if source.source_type == "codex_sessions" and not _is_codex_session(text):
+            continue
+        if source.source_type == "claude_sessions" and not _is_claude_session(text):
             continue
         signals, snippets = _signals_and_snippets(text, source.root)
         if not signals:
@@ -148,6 +174,7 @@ def index_source(source: SourceSettings) -> list[SourceRef]:
                 title=_title(text, path.stem),
                 signals=signals,
                 snippets=snippets,
+                content_sha256=_content_digest(raw, stat.st_size),
             )
         )
     return records

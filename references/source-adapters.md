@@ -15,7 +15,7 @@ Extract only session id, timestamp, cwd, and bounded task/next-step signals. Do 
 
 ## Claude sessions
 
-Expected source: explicit project subtrees under the local Claude configuration directory. Treat transcripts as private plaintext. Extract bounded task signals only; never publish or commit transcript content.
+Expected source: explicit project subtrees under the local Claude configuration directory. Accept only JSONL files whose first record is a typed entry bound to a session — a string `type` plus a `sessionId`, `cwd` or `uuid`. That shape is observed on real transcripts, not published as a contract; a data export or log that merely ends in `.jsonl` is skipped. Treat transcripts as private plaintext. Extract bounded task signals only; never publish or commit transcript content.
 
 ## Obsidian and Markdown
 

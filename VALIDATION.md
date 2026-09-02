@@ -750,3 +750,47 @@ material (the unreproducible red claim, the dirty-set identity, the mis-shaped s
 guard) and none a false positive. The seat also read `claude --help` itself and confirmed
 the `--restricted` / `--tools` interaction. Keep.
 
+
+## v0.3.1 polish · 2026-09-02 · closing what the ledger had left as "next"
+
+Steven's scope for the final polish before promotion: README fact sync, SKILL.md wording,
+REPORT.html detail, and the three code items this ledger and the project backlog had
+recorded as next steps. Regression module `tests/test_content_identity.py`; run against
+the tree before this round (`ce16db8`, scratch worktree, module copied in), 4 of 5 cases
+fail — the fifth guards ledgers written before this round and passes on both trees by
+construction.
+
+### Adopted
+
+| | Item | Was | Now |
+|---|---|---|---|
+| A29 | Content identity in de-duplication — the "real fix" A25 recorded as next | `_already_answered` compared the newest cited mtime: a `cp -p`, `tar -x` or checkout re-did settled work, and a same-second edit was suppressed. | Every indexed file record carries `content_sha256` — the file size plus the bounded prefix the indexer read — and a sweep carries a digest over its members. When both the sibling ledger and the candidate carry one, identity is content; ledgers written before this round fall back to the stamp. |
+| A30 | `claude_sessions` had no acceptance rule (backlog item since 2026-08-24) | Any `.jsonl` under the root with a marker word was indexed as a session; `codex_sessions` had required a `session_meta` first record since v0.1. | The first record must be a typed entry bound to a session (`type` plus `sessionId`, `cwd` or `uuid`). Surveyed on 1,908 real transcripts on one machine: every one opens that way (1,901 with `sessionId`). `source-adapters.md` states the rule as observed, not published. |
+| A31 | `task_policy.minimum_score` default 12 sat below the formula's floor (backlog item since 2026-08-24) | The formula bottoms out at 24 for a file record; the 09-01 corpus ranged 45–59. The default had never removed a candidate. | Default 30 in code and example, documented in `task-contract.md`; a test pins the default inside the reachable range so the knob cannot go dead again. It drops only a stale file carrying one weak marker. |
+
+Also in this round: README's status paragraph and worker section were behind the ledger
+(three real tasks → the overnight run; "`balanced` has never run for real" → run once on
+08-26; `--restricted` absent from the worker description while SECURITY.md carried it).
+SKILL.md took six of eight findings from a skill-reviewer pass — the output contract
+explained file by file, `allowance window` as the one term for the inner cycle, the
+refusal clause naming all three required items, `Worker` casing, item 3 as a checklist,
+em dashes; declined were a body/description de-duplication that would have left the body
+incomplete, and a README-wide casing sweep beyond the four role lines fixed.
+
+### Mechanical checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Unit/integration suite | PASS | 156 tests, Python 3.14. |
+| New module against `ce16db8` | PASS (red) | 4 failures of 5 in a scratch worktree with the module copied in; all 5 green after. |
+| ruff | PASS | `ruff 0.16.5`, `check src tests scripts` clean. |
+| Schema drift | PASS | `content_sha256` lives inside `source_refs` items, which the task-spec schema types as free objects; run-state and task-result contracts unchanged. |
+| Real 09-01 runs re-rendered | PASS | `bbr report --run-dir` over copies of runs 1 and 3 under current code, exit 0. |
+
+### Judgment, not fact
+
+- A31 changed no real queue: nothing in the 09-01 corpus scored under 45. Whether a
+  stale single-marker file deserves a slice of the night is a product judgment; the 27
+  artifact grades remain the only input that could turn the scorer from proxy to value.
+- A29 hashes the prefix the indexer reads plus the file size. A change entirely past
+  the byte cap that leaves the size identical is not detected. Recorded, not fixed.

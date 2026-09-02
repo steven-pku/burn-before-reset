@@ -29,6 +29,24 @@ record of what has actually been proven.
   character veto; git-dirty identity is a fingerprint of the whole dirty set; sweep
   identity is a membership digest; mis-shaped sibling ledgers are skipped; the
   call-cap stop keeps its unused-window line.
+- De-duplication compares the *content* of cited sources when both sides carry a
+  digest (`content_sha256`: file size plus the bounded prefix the indexer read): a
+  touch, copy or checkout no longer re-does settled work, and a same-second edit is
+  no longer suppressed. Ledgers written before this fall back to the stamp (A29).
+- `claude_sessions` accepts only transcript-shaped JSONL — a first record with a
+  `type` and a `sessionId`, `cwd` or `uuid` — as `codex_sessions` has required
+  `session_meta` since v0.1; a data export that merely ends in `.jsonl` is skipped (A30).
+- `task_policy.minimum_score` defaults to 30; the earlier 12 sat below the formula's
+  floor of 24 and had never filtered a candidate. A test pins the default inside the
+  reachable range (A31).
+
+### Changed
+
+- README status and worker sections brought level with the ledger: the first
+  overnight run, `balanced` run once for real, `--restricted` in the worker
+  description. SKILL.md wording pass: the output contract explained file by file,
+  one term for the inner allowance window, the refusal clause naming all three
+  required items.
 
 
 ## [0.3.0] — 2026-09-02

@@ -333,7 +333,7 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
         raise ConfigError("run.output_root must not overlap any source root")
 
     task_policy = TaskPolicy(
-        minimum_score=int(policy_data.get("minimum_score", 12)),
+        minimum_score=int(policy_data.get("minimum_score", 30)),
         maximum_risk=int(policy_data.get("maximum_risk", 2)),
         maximum_human_dependency=int(policy_data.get("maximum_human_dependency", 1)),
         max_candidates=int(policy_data.get("max_candidates", 50)),

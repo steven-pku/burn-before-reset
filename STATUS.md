@@ -2,10 +2,10 @@
 project_state: active
 stage: v0-3-public
 health: amber
-updated_at: 2026-09-02T14:30:00+08:00
+updated_at: 2026-09-02T22:00:00+08:00
 next_action_owner: Claude
-next_action: A fresh session covers three things — final polish of the Skill itself, launch posts for X in English and Chinese, and promotional video plus image sets for Xiaohongshu and Douyin. Steven still owes the 27 artifact grades and the Settings upload of the social preview.
-blocked_by: ["Promotional assets have no agreed landing yet: they must not enter the public repository.", "Artifact value is ungraded, so selection is still ranked by how *live* a finding looks rather than by what it is worth.", "`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do."]
+next_action: Cut v0.3.1 with Steven's go-ahead — merge the polish branch to main, tag, GitHub Release — so the launch posts point at a release that carries `--restricted`; then the X posts (English and Chinese) and the Xiaohongshu/Douyin set. Steven still owes the 27 artifact grades and the Settings upload of the social preview.
+blocked_by: ["v0.3.1 tag and release are a T2 action awaiting Steven; v0.3.0 predates the fourth-audit fixes.", "Artifact value is ungraded, so selection is still ranked by how *live* a finding looks rather than by what it is worth.", "`verified` also needs a decision on installation targets; PROMOTION_GATE itself is satisfied at 3/3.", "Trigger reliability is model-dependent: Haiku sees the Skill but does not invoke it; capable models do."]
 ---
 
 # Burn Before Reset · Status
@@ -14,7 +14,7 @@ blocked_by: ["Promotional assets have no agreed landing yet: they must not enter
 
 - Lifecycle is `candidate`, approved for public release under the 2026-08-24 decision "Publish as a public candidate after one real pilot".
 - A pre-publication audit reproduced four defects, all repaired with regression tests that fail against the previous behaviour. Details in `VALIDATION.md`.
-- Three real Codex tasks have run end to end across two source types, and the deadline guard has been observed killing a live Codex process group. `PROMOTION_GATE` is satisfied at 3/3; `verified` additionally needs an installation-target decision.
+- Real Codex tasks have run end to end across two source types, the deadline guard has been observed killing a live Codex process group, and one full overnight run (2026-09-01) burned a real allowance to exhaustion. `PROMOTION_GATE` is satisfied at 3/3; `verified` additionally needs an installation-target decision.
 - Not installed globally. Not `verified`. Not proven safe for unattended sensitive data.
 
 ## Completed
@@ -38,6 +38,7 @@ blocked_by: ["Promotional assets have no agreed landing yet: they must not enter
 - **v0.3.0 released (2026-09-02)**: community profile at 100% (code of conduct, contributing guide, issue and PR templates), launch assets re-rendered in the v0.3 identity, README showcase of `REPORT.html`, CHANGELOG 0.3.0, GitHub Releases for v0.3.0 (latest) and v0.2.0. CI green on `8b19e28` (lint + six-way matrix). The social-preview upload in Settings is the one manual step left.
 - **HTML report shipped (2026-09-02)**: `REPORT.html` beside the Markdown twin — fixed-format opening, proverb verdict on what was delivered, validated palette and icon system, handoff-first actions. Adaptation matrix of 17 synthetic scenarios across languages × outcomes × shapes caught two release-blocking defects (Japanese users served a Chinese page; raw `<script>` in the data payload). `run.report_language` added. Details in `VALIDATION.md` (A18–A19).
 - **First full overnight run (2026-09-01)**: unattended, autopilot, real expiring weekly allowance. 25 tasks completed, 27 artifacts, $71.38, and the allowance driven to genuine exhaustion — the thing the tool exists to do, done for the first time. Four defects found and repaired with regression tests, all in `VALIDATION.md`: quota exhaustion misread as a malformed worker result (the refusal was stated only in the `result` text, which diagnostics excluded as "the deliverable"); source-movement detection blaming a worker that held no write tool; a dead run making the next run redo its finished work (7 of 27 artifacts were repeats, ~$25 of the night); and reports written in English over Chinese-language sources because nothing in the run carried a language signal but the prompt itself.
+- **v0.3.1 polish (2026-09-02)**: Steven chose all four polish items. README brought level with the ledger (overnight run, `balanced` run once, `--restricted`); SKILL.md took six of eight skill-reviewer findings; three backlog code items closed with a regression module that goes 4-of-5 red against `ce16db8` — content identity in de-duplication (A29), a `claude_sessions` acceptance rule surveyed on 1,908 real transcripts (A30), and a `minimum_score` default that can actually fire (A31). 156 tests, ruff clean. Promotional material has its landing (Steven, 2026-09-02): X material in `promo/` (gitignored and excluded), Xiaohongshu/Douyin in the CE workspace, copy drafts in the vault — nothing under the public tree. Details in `VALIDATION.md`.
 
 ## In progress
 
@@ -59,7 +60,8 @@ blocked_by: ["Promotional assets have no agreed landing yet: they must not enter
 ## Verification
 
 - `python3 -m py_compile scripts/bbr.py src/burn_before_reset/*.py`: PASS.
-- `PYTHONPATH=src python3 -m unittest discover`: PASS, 82 tests, Python 3.14.7 — green both normally and under a masked PATH with `codex`/`claude` absent.
+- `PYTHONPATH=src python3 -m unittest discover`: PASS, 156 tests, Python 3.14 (2026-09-02) — earlier rounds also green under a masked PATH with `codex`/`claude` absent.
+- `uvx ruff check src tests scripts`: PASS, ruff 0.16.5 (2026-09-02).
 - Regression tests confirmed to fail against the pre-repair behaviour: 7 of 10 failed in the first reverted scratch copy, both tests from the second round failed in a second one, and 16 of 22 third-audit cases failed in a third (the 6 green ones are inputs the old code already rejected). Positive-side tests pass in both states by design.
 - Schema drift tests: PASS; planner output matches the shipped contracts, and no undeclared fields are emitted.
 - `quick_validate.py <repo>`: PASS, Skill valid; description 527 of 1024 characters.

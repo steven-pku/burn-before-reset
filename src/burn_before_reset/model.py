@@ -16,6 +16,11 @@ class SourceRef:
     # Identity of the content behind the reference where mtime cannot carry it:
     # a git source's whole dirty set, a sweep's membership. Empty when unused.
     fingerprint: str = ""
+    # Digest of the bytes the indexer actually read (size + bounded prefix), so a
+    # touch, copy or checkout that changed only the stamp is not mistaken for new
+    # content, and a same-second edit is not mistaken for none. Empty for records
+    # without a file body of their own (git status, sweeps).
+    content_sha256: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)

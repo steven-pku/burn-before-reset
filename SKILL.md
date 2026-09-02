@@ -1,6 +1,6 @@
 ---
 name: burn-before-reset
-description: Burn expiring AI subscription quota into reviewable local work, then hard-stop before the reset deadline. The agent finds the most valuable unfinished work itself — from session logs, repositories, and documents — and rides inner replenishment windows until the outer reset. 在额度重置前把快过期的订阅额度转成可追溯、可验收的本地成果。Triggers 触发："burn before reset", "use up my quota before it resets", "clear the backlog overnight", "run something useful before my limit resets", 烧钱 Skill, 额度重置前, 夜间清 backlog. Asks one up-front message for read scope, which subscription and roughly when it resets, billing confirmation, and whether to autopilot; refuses without read scope or billing confirmation. Not for cloud tasks, API-key billing, paid credits, auto top-up, provider switching, or anything that publishes, deploys, or deletes.
+description: Burn expiring AI subscription quota into reviewable local work, then hard-stop before the reset deadline. The agent finds the most valuable unfinished work itself — from session logs, repositories, and documents — and rides inner allowance windows until the outer reset. 在额度重置前把快过期的订阅额度转成可追溯、可验收的本地成果。Triggers 触发："burn before reset", "use up my quota before it resets", "clear the backlog overnight", "run something useful before my limit resets", 烧钱 Skill, 额度重置前, 夜间清 backlog. Asks one up-front message for read scope, which subscription and roughly when it resets, billing confirmation, and whether to autopilot; refuses without read scope, a subscription and reset time, or billing confirmation. Not for Cloud Tasks, API-key billing, paid Credits, Auto top-up, provider switching, or anything that publishes, deploys, or deletes.
 ---
 
 # Burn Before Reset
@@ -9,11 +9,11 @@ Turn quota that is about to expire into work that is traceable, reviewable, and 
 
 ## When to use this
 
-The user wants their expiring subscription quota converted into useful work before it resets — and typically does not know what that work should be, because they are about to sleep. **Finding the most valuable unfinished work is this Skill's job**: known todos and unknown ones, recovered from Claude/Codex session logs, repositories, and documents (`bbr discover` proposes sources; no note vault is assumed). The runner freezes a bounded queue, works it with a safe local worker (Codex CLI or Claude Code, per `execution.provider`), rides inner allowance windows, and leaves one Morning Report.
+The user wants their expiring subscription quota converted into useful work before it resets — and typically does not know what that work should be, because they are about to sleep. **Finding the most valuable unfinished work is this Skill's job**: known todos and unknown ones, recovered from Claude/Codex session logs, repositories, and documents (`bbr discover` proposes sources; no note vault is assumed). The runner freezes a bounded queue, works it with a local Worker (Codex CLI or Claude Code, per `execution.provider`), rides inner allowance windows, and leaves one Morning Report.
 
 ## When not to use this
 
-Cloud Tasks, API-key billing, existing paid Credits, auto top-up, provider switching, production systems, outbound messages, publishing, deploying, pushing, merging, deleting, or sensitive personal data.
+Cloud Tasks, API-key billing, existing paid Credits, Auto top-up, provider switching, production systems, outbound messages, publishing, deploying, pushing, merging, deleting, or sensitive personal data.
 
 ## Ask this once, up front, in one message
 
@@ -35,8 +35,9 @@ default buffer is enough; never send the user off to look up a precise timestamp
 the conservative edge of whatever they say.
 
 **3 · Confirm nothing can be charged.**
-Subscription login in use, no pay-per-use balance available, auto top-up or extra usage
-off. This is the user's assertion; the tool cannot verify the account.
+Confirm three things: subscription login is in use, no pay-per-use balance is available,
+and Auto top-up / extra usage is off. This is the user's assertion — the tool cannot
+verify the account.
 
 **4 · Review the plan, or autopilot?**
 Autopilot (看着办) is the expected answer overnight: discover, configure, plan, and
@@ -92,8 +93,8 @@ Continuation is on by default (`wait_for_replenish = true`).
   `balanced`) is blamed; the line above the list says which happened.
 - **Errors reported by the Worker** lists error events that arrived even on a zero-exit run. Read them before trusting any artifact.
 - `workers/<task>/DROPPED_ENV.txt`, when present, lists environment variables withheld from the Worker because they could redirect the endpoint or supply a key.
-- `STOP_REASON` distinguishes `quota_exhausted` -- the allowance ran out and waiting
-  was disabled or cut short -- from `billing_or_auth_error`, which is a fault. Do not
+- `STOP_REASON` distinguishes `quota_exhausted` — the allowance ran out and waiting
+  was disabled or cut short — from `billing_or_auth_error`, which is a fault. Do not
   report the first as a failure.
 - **Planning rounds** and **quota replenishment waits** in the Morning Report show how
   the night was actually spent: rounds > 1 means the queue drained and was refilled
@@ -101,7 +102,14 @@ Continuation is on by default (`wait_for_replenish = true`).
 
 ## Output contract
 
-Every run directory contains `RUN_PLAN.md`, `CANDIDATES.jsonl`, `QUEUE.json`, `RUN_STATE.json`, `CHECKPOINTS.md`, `events.jsonl`, `artifacts/`, `MORNING_REPORT.md`, `REPORT.html`, and `STOP_REASON`.
+Every run directory contains:
+
+- `RUN_PLAN.md` — the plan as frozen, including what was skipped as already answered; read back at step 5
+- `CANDIDATES.jsonl` — every scored candidate, before the freeze
+- `QUEUE.json` and `RUN_STATE.json` — the frozen queue and the live state; read back at step 5
+- `CHECKPOINTS.md` and `events.jsonl` — per-task progress and the raw event log behind the receipts
+- `artifacts/` — deliverables promoted from completed Worker runs; failed output stays diagnostic under `workers/`
+- `MORNING_REPORT.md`, `STOP_REASON`, and `REPORT.html` — read back at step 9; the page is the user's copy
 
 ## Load on demand
 

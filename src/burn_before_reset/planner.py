@@ -300,6 +300,13 @@ def _sweep_tasks(records: list[SourceRef], run_dir: Path, now: datetime) -> list
             signals=tuple(signals),
             snippets=(f"{len(members)} files in this project carry unfinished-work markers",),
             fingerprint=membership,
+            # Content identity of the whole set, so a touch across the project is not
+            # a new sweep and a same-second edit inside it is.
+            content_sha256=(
+                hashlib.sha256("\n".join(sorted(m.content_sha256 for m in members)).encode("utf-8")).hexdigest()[:16]
+                if all(m.content_sha256 for m in members)
+                else ""
+            ),
         )
         # Membership is part of the identity: a project whose set of marked files
         # changed -- gained, lost, or swapped one for another -- is a different
@@ -457,6 +464,21 @@ def _newest_source_time(source_refs: Any) -> datetime | None:
     return max(times) if times else None
 
 
+def _source_digest(source_refs: Any) -> str:
+    """One digest over the content of every cited source, or "" if any ref lacks one."""
+    parts: list[str] = []
+    for ref in source_refs or []:
+        if not isinstance(ref, dict):
+            return ""
+        digest = ref.get("content_sha256")
+        if not isinstance(digest, str) or not digest:
+            return ""
+        parts.append(f"{ref.get('path', '')}\0{digest}")
+    if not parts:
+        return ""
+    return hashlib.sha256("\n".join(sorted(parts)).encode("utf-8")).hexdigest()[:16]
+
+
 def prior_completions(config: AppConfig, current_run_dir: Path) -> dict[str, dict[str, Any]]:
     """What earlier runs in this output root already finished, and against what state.
 
@@ -523,6 +545,7 @@ def _absorb_sibling(run_dir: Path, done: dict[str, dict[str, Any]]) -> None:
                 if previous is None or newest > previous["source_newest"]:
                     done[task_id] = {
                         "source_newest": newest,
+                        "source_digest": _source_digest(task.get("source_refs")),
                         "run": run_dir.name,
                         "artifact": str(artifact),
                         "title": task.get("title", task_id),
@@ -540,6 +563,12 @@ def _already_answered(task: TaskSpec, prior: dict[str, dict[str, Any]]) -> dict[
     record = prior.get(task.id)
     if record is None:
         return None
+    digest = _source_digest(task.source_refs)
+    if digest and record.get("source_digest"):
+        # Content identity when both sides carry it: a touch, copy or checkout that
+        # changed only the stamp is not movement, and a same-second edit is. Ledgers
+        # written before digests existed fall through to the stamp below.
+        return record if digest == record["source_digest"] else None
     newest = _newest_source_time(task.source_refs)
     # Any difference is movement. A stamp that went *backwards* (cp -p, tar -x,
     # touch -r, a checkout) is still new content the earlier answer never saw.
