@@ -10,6 +10,10 @@ record of what has actually been proven.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.1] — 2026-09-02
+
 ### Fixed
 
 - Fourth external audit round (Grok 4.6, Kimi), all with regression tests that fail
@@ -39,6 +43,8 @@ record of what has actually been proven.
 - `task_policy.minimum_score` defaults to 30; the earlier 12 sat below the formula's
   floor of 24 and had never filtered a candidate. A test pins the default inside the
   reachable range (A31).
+- `REPORT.html` counted one thing in the plural in English ("1 decisions framed");
+  the hours tile was labelled "Hours" under "1.3h", now "Elapsed".
 
 ### Changed
 
@@ -207,7 +213,8 @@ pilot are dated 2026-08-24 in `STATUS.md`.
   index.
 
 <!-- v0.1.0 has no git tag; it is the initial import commit 0fdd27e. Retag at release if wanted. -->
-[Unreleased]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/steven-pku/burn-before-reset/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/steven-pku/burn-before-reset/compare/0fdd27e...v0.2.0
 [0.1.0]: https://github.com/steven-pku/burn-before-reset/commit/0fdd27e

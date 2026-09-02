@@ -781,11 +781,11 @@ incomplete, and a README-wide casing sweep beyond the four role lines fixed.
 
 | Check | Result | Evidence |
 |---|---|---|
-| Unit/integration suite | PASS | 156 tests, Python 3.14. |
+| Unit/integration suite | PASS | 157 tests, Python 3.14. |
 | New module against `ce16db8` | PASS (red) | 4 failures of 5 in a scratch worktree with the module copied in; all 5 green after. |
 | ruff | PASS | `ruff 0.16.5`, `check src tests scripts` clean. |
 | Schema drift | PASS | `content_sha256` lives inside `source_refs` items, which the task-spec schema types as free objects; run-state and task-result contracts unchanged. |
-| Real 09-01 runs re-rendered | PASS | `bbr report --run-dir` over copies of runs 1 and 3 under current code, exit 0. |
+| Real 09-01 runs re-rendered | PASS | `bbr report --run-dir` over copies of runs 1 and 3 under current code, exit 0; both pages screenshotted full-length and read. Two copy defects found and fixed with a test: English counted one thing in the plural ("1 decisions framed"), and the hours tile was labelled "Hours" under "1.3h" (now "Elapsed", matching 用时). |
 
 ### Judgment, not fact
 
