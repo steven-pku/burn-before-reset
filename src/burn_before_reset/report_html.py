@@ -197,7 +197,7 @@ CHROME: dict[str, dict[str, Any]] = {
         "why_fault_empty": "For a run that hit a snag before it could deliver — the ledger says why",
         "why_empty": "For a run that chose to stop rather than burn your quota through uncertainty",
         "facts": {"completed": "Tasks completed", "artifacts": "Artifacts", "spent": "Burned",
-                  "tokens": "Tokens out", "hours": "Hours", "stop": "How it stopped"},
+                  "tokens": "Tokens out", "hours": "Elapsed", "stop": "How it stopped"},
         "sections": {
             "first": ("Start here", "Grouped by the kind of work. Decisions come first."),
             "work": ("The work", "Every artifact, with where it came from. Queue any of them for your agent."),
@@ -206,13 +206,22 @@ CHROME: dict[str, dict[str, Any]] = {
         },
         "attention_empty": "Nothing needs a decision. Read at leisure.",
         "archetype": {
-            "decision": ("decisions framed", "the evidence is laid out; they only need your call"),
+            "decision": ("decisions framed", "the evidence is laid out; only your call is missing"),
             "verify": ("claims verified", "confirmed, refuted, or uncheckable — read the verdicts"),
             "blocker": ("blockers analysed", "what needs a person, and what only needs work"),
             "patch": ("patch plans", "reviewable plans for uncommitted work; review before touching the repo"),
             "thread": ("threads recovered", "where the work stopped, and the next executable step"),
             "recover": ("work recovered", "unfinished work inventoried and made resumable"),
             "sweep": ("project sweeps", "whole-project audits: what nobody wrote down"),
+        },
+        "archetype_one": {
+            "decision": "decision framed",
+            "verify": "claim verified",
+            "blocker": "blocker analysed",
+            "patch": "patch plan",
+            "thread": "thread recovered",
+            "recover": "work recovered",
+            "sweep": "project sweep",
         },
         "first_action": "First: {n} {name} — {hint}",
         "exc_failed": "Failed {n}",
@@ -947,7 +956,7 @@ def _comp_block(items: list[dict[str, Any]], chrome: dict[str, Any]) -> str:
     for key in ARCHETYPE_ORDER:
         if key not in counts:
             continue
-        name = chrome["archetype"][key][0]
+        name = _kind_name(chrome, key, counts[key])
         hero = key == dominant
         cards.append(
             f'<div class="tile c{" hero" if hero else ""}" style="{_hue(key)}">'
@@ -957,6 +966,13 @@ def _comp_block(items: list[dict[str, Any]], chrome: dict[str, Any]) -> str:
             + "</div>"
         )
     return f'<div class="comp">{"".join(cards)}</div>'
+
+
+def _kind_name(chrome: dict[str, Any], key: str, count: int) -> str:
+    """The archetype label as it reads next to a count: "1 decision framed", "2 decisions framed"."""
+    if count == 1 and key in chrome.get("archetype_one", {}):
+        return chrome["archetype_one"][key]
+    return chrome["archetype"][key][0]
 
 
 def _fact_block(state: dict[str, Any], items: list[dict[str, Any]], chrome: dict[str, Any], lang: str) -> str:
@@ -999,8 +1015,8 @@ def _fixed_lines(state: dict[str, Any], items: list[dict[str, Any]], chrome: dic
         counts[item["archetype"]] = counts.get(item["archetype"], 0) + 1
     for key in ARCHETYPE_ORDER:
         if key in counts:
-            name, hint = chrome["archetype"][key]
-            text = chrome["first_action"].format(n=counts[key], name=name, hint=hint)
+            hint = chrome["archetype"][key][1]
+            text = chrome["first_action"].format(n=counts[key], name=_kind_name(chrome, key, counts[key]), hint=hint)
             out.append(f'<div class="tile fline"><span class="ico">{_ico("arrow")}</span><span>{_esc(text)}</span></div>')
             break
     failed = len(state.get("failed") or [])
@@ -1029,7 +1045,7 @@ def _first_section(items: list[dict[str, Any]], chrome: dict[str, Any]) -> str:
         members = groups.get(key)
         if not members:
             continue
-        name, hint = chrome["archetype"][key]
+        name, hint = _kind_name(chrome, key, len(members)), chrome["archetype"][key][1]
         chips = "".join(
             f'<button class="chip" data-id="{_esc(m["id"])}">{_ico("arrow", 12)}{_esc(m["short"])}'
             f' <span class="cp">· {_esc(m["project"])}</span></button>'

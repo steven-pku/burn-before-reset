@@ -285,3 +285,20 @@ class ReportScenarioTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SingularLabelTests(unittest.TestCase):
+    """English counts one thing in the singular; the Chinese page counts with 个 and needs nothing."""
+
+    def test_one_decision_reads_in_the_singular(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = make_run(Path(temporary) / "run", items=[("decision", "d-1", "p"), ("sweep", "s-1", "p"), ("sweep", "s-2", "p")])
+            page = render(run_dir, "en")
+            self.assertIn("1 decision framed", page)
+            self.assertNotIn("1 decisions framed", page)
+            self.assertIn('class="name">decision framed<', page)
+            self.assertIn('class="name">project sweeps<', page)
+            self.assertNotIn('class="name">decisions framed<', page)
+            self.assertIn("Elapsed", page)
+            zh = render(run_dir, "zh")
+            self.assertIn("1 个备好的决策", zh)
