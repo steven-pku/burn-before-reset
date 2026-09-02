@@ -123,3 +123,12 @@ Record only approved decisions or approved evidence-driven reversals. Append new
 - Decision: (D1) a short-window autopilot dry run happens this week before the full-premise overnight run; (D2) the public flip and skill-directory submissions follow a passing autopilot run; (D3) `balanced` mode was closed with one real workspace-write run rather than by waiver, and the inconclusive Kimi review lane is closed as compensated by three completed independent audit seats.
 - Evidence: balanced run `run-20260826-141005-01c39da3` — 2/2 tasks, sources byte-identical, `validate-run` clean.
 - Revisit when: the dry run or the overnight run surfaces artifact-quality problems.
+
+## 2026-09-02 · Release v0.3.1 before promotion; promotional material stays out of the repository
+
+- Status: `approved`
+- Decision maker: Steven (closeout decision card, receipts D1–D4)
+- Decision: (D1) Merge the polish branch to `main`, push, tag `v0.3.1`, and publish a GitHub Release, so the launch posts point at a release that carries `--restricted` and A20–A31; the `task_policy.minimum_score` default moves from 12 to 30 in the same release. (D2/D3) The English and Chinese X launch articles are final; Steven chooses the posting time and posts himself. (D4) Xiaohongshu gets a single-card image post through the CE line; the Douyin video is deferred, so no paid TTS or rendering happens now. Landing for promotional material: X material under `promo/` (gitignored and locally excluded, never in the public tree), Xiaohongshu/Douyin material in the CE workspace, copy in the vault only as links.
+- Rationale: `v0.3.0` was tagged before the fourth external audit was adopted, so the public release lacked the round's most important fix; promoting it would have endorsed the unpatched build. The old `minimum_score` default sat below the formula's floor of 24 and had never filtered a candidate; 30 drops only a stale file carrying one weak marker and changed nothing in the first real overnight corpus (45–59).
+- Alternatives: merge without tagging and point the posts at `main`; hold the branch for Steven's own diff review; run the full video line with paid TTS now.
+- Revisit when: artifact grades arrive (they are the only input that can turn the scorer from proxy to value, and may move the floor), or a real run shows the floor discarding work worth doing.
