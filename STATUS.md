@@ -12,18 +12,18 @@ blocked_by: []
 
 ## Current state
 
-- v0.3.2 is the approved release target. This commit contains the release candidate; the GitHub tag, Release page and Actions run are the external publication receipts.
+- [v0.3.2 is published](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.2). The annotated tag resolves to `7bc74bad29dc7da32464e15a2ab6201b9aaa3063`; [release CI](https://github.com/steven-pku/burn-before-reset/actions/runs/34044298883) passed all seven jobs.
 - The project remains a public `candidate`, not a globally installed or `verified` Skill. This distinction is not a blocker to the public candidate release Steven approved.
 - Explicit reviewed-queue/autopilot selection, frozen configuration/deadline binding, an independent runtime ceiling, open-task filtering, Git worktree discovery and qualified report labels are implemented.
 - English and Chinese README, a no-model first-use demo, sample report screenshot, terminal GIF, contribution checks and security-report links are aligned with the release.
-- Private vulnerability reporting is enabled. The standard 1280×640 social-preview asset is included; the Settings upload is tracked in the final release receipt.
+- Private vulnerability reporting is enabled. The standard 1280×640 social-preview asset is included; the replacement Settings upload is blocked by the browser extension’s file-access permission; the existing social card remains in place.
 
 ## Verification
 
 - 167 hermetic unit/integration tests pass, including ten new regressions that fail against the previous implementation.
 - Pinned ruff 0.16.5 passes. The first-use demo validates its real plan, confirms unchanged source content and refuses execution; its illustrative reports are clearly labelled.
 - A fresh Codex process is used for repository Skill inventory and startup-log verification. Discovery does not prove reliable model triggering.
-- The published commit’s GitHub Actions result, tag and Release URL provide remote verification. See the final dated entry in VALIDATION for local release checks.
+- The published release was independently read back as non-draft and non-prerelease. About text is updated; README report and terminal GIF load on the public page. See the final dated entry in VALIDATION for receipts.
 
 ## Evidence and limits
 

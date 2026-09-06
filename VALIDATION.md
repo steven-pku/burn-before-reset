@@ -841,3 +841,11 @@ Steven explicitly approved pushing the remediation and completing release prepar
 - Remote Actions, the version tag and GitHub Release are checked after pushing this commit. Their server records are the authoritative publication receipts; this pre-push entry does not claim those actions have already completed.
 
 No new real model pilot, paid fallback, global installation, server-side balance verification or human adoption measurement is claimed by this release.
+
+### Remote publication receipt
+
+- `main` was pushed successfully. Annotated tag `v0.3.2` resolves to release commit `7bc74bad29dc7da32464e15a2ab6201b9aaa3063`.
+- [Release](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.2) is published and returned by the latest-release endpoint; `draft: false`, `prerelease: false` independently verified.
+- [GitHub Actions run 34044298883](https://github.com/steven-pku/burn-before-reset/actions/runs/34044298883) passed all seven jobs: lint plus Python 3.11–3.13 on Linux and macOS, including the no-model demo.
+- Repository About text was updated and independently read back. The public README loads the 1280×720 report image and 1200×640 terminal GIF successfully.
+- Social-preview replacement is the remaining presentation item: browser upload returned `Not allowed` because the extension lacks file access. The 1280×640 asset is ready; the existing remote social card remains unchanged. This does not alter the published code or Release.
