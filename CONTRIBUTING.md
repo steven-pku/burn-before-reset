@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for looking. This project runs unattended against people's own notes and repositories with their subscription quota, so the bar for a change is "provably safe", not "looks right".
+This project works with local notes, repositories and subscription quota. Contributions should include evidence that their changes preserve the documented execution boundaries.
 
 ## Before you open a PR
 
 ```bash
-python3 -m unittest discover -v          # 128+ tests, hermetic: no codex/claude binary required
-uvx ruff check .                          # CI runs ruff 0.16.x; it is the first thing that fails
-python3 scripts/bbr.py validate-config --config examples/config.example.toml   # exit 2 is expected: placeholders
+python3 scripts/check.py                  # hermetic tests; no model CLI required
+uvx ruff==0.16.5 check .                  # pinned to the same version as CI
+python3 scripts/demo.py                   # plan + illustrative report; no model calls
 ```
 
 ## The three rules every change follows
@@ -30,3 +30,7 @@ See `SECURITY.md`. Please do not open a public issue for anything that could let
 ## Audits are welcome
 
 This tool has been through four external audit rounds. If you want to audit it, `docs`-free is fine: start from `SKILL.md`, then `worker.py`, `runner.py`, `planner.py`. Findings with a file:line and a reproduction path are adopted fast; hypotheses are welcome too — label them as such.
+
+## Release consistency
+
+Before proposing a tag, run `python3 scripts/check.py --release-tag vX.Y.Z` with the intended version. Keep `pyproject.toml` and the release entry in `CHANGELOG.md` aligned. An Unreleased entry is not a published release.

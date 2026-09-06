@@ -294,11 +294,24 @@ class SingularLabelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             run_dir = make_run(Path(temporary) / "run", items=[("decision", "d-1", "p"), ("sweep", "s-1", "p"), ("sweep", "s-2", "p")])
             page = render(run_dir, "en")
-            self.assertIn("1 decision framed", page)
-            self.assertNotIn("1 decisions framed", page)
-            self.assertIn('class="name">decision framed<', page)
+            self.assertIn("1 decision brief", page)
+            self.assertNotIn("1 decision briefs", page)
+            self.assertIn('class="name">decision brief<', page)
             self.assertIn('class="name">project sweeps<', page)
-            self.assertNotIn('class="name">decisions framed<', page)
+            self.assertNotIn('class="name">decision briefs<', page)
             self.assertIn("Elapsed", page)
             zh = render(run_dir, "zh")
-            self.assertIn("1 个备好的决策", zh)
+            self.assertIn("1 个决策分析", zh)
+
+
+class EvidenceLabelTests(unittest.TestCase):
+    def test_uncheckable_report_is_not_counted_as_verified(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = make_run(Path(temporary), items=[("verify", "unknown", "sample")], bodies={"unknown": "# Review\n\nUncheckable from here. No evidence is available."})
+            page = render(run, "en")
+            self.assertIn("Uncheckable from here", page)
+            self.assertIn("1 claim review", page)
+            self.assertNotIn("claim verified", page)
+            self.assertIn("not bills, savings, remaining quota or artifact value", page)
+            self.assertIn("加入交办清单", render(run, "zh"))
+            self.assertNotIn("已交办给我的 agent", render(run, "zh"))

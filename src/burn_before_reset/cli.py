@@ -30,7 +30,9 @@ def _parser() -> argparse.ArgumentParser:
 
     run = subparsers.add_parser("run")
     run.add_argument("--config", required=True, type=Path)
-    run.add_argument("--run-dir", type=Path)
+    choice = run.add_mutually_exclusive_group(required=True)
+    choice.add_argument("--run-dir", type=Path, help="execute only this reviewed frozen queue")
+    choice.add_argument("--autopilot", action="store_true", help="authorize initial planning and follow-up rounds")
     run.add_argument("--execute", action="store_true")
 
     validate = subparsers.add_parser("validate-run")
@@ -102,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             # From here the process supervises an unattended run; keep it alive through
             # a closing session and make any stop finalise the receipts.
             install_supervisor_signals()
-            state = execute_run(config, run_dir, entry_script)
+            state = execute_run(config, run_dir, entry_script, autopilot=args.autopilot)
             print(json.dumps({"run_dir": str(run_dir), "stop_reason": state["stop_reason"]}, indent=2))
             return 0 if state.get("stop_reason") == "queue_exhausted" and not state.get("failed") else 1
         if args.command == "burn":

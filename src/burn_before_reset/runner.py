@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import signal
 import time
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from .config import AppConfig
+from .config import AppConfig, config_fingerprint
 from .planner import plan_followup_round
 from .report import write_morning_report
 from .report_html import write_html_report
@@ -219,7 +220,7 @@ def _work_queue(
     stop_reason: str,
 ) -> str:
     """Dispatch one frozen queue. Returns the reason dispatch ended."""
-    drain_at = config.run.reset_at - timedelta(minutes=config.run.drain_window_minutes)
+    drain_at = config.run.hard_stop_at - timedelta(minutes=config.run.drain_window_minutes - config.run.safety_buffer_minutes)
     for task in tasks:
         if _stop_requested:
             return "operator_stop"
@@ -358,11 +359,11 @@ def _work_queue(
 
 def _time_for_another_round(config: AppConfig) -> bool:
     now = datetime.now(tz=config.run.reset_at.tzinfo)
-    drain_at = config.run.reset_at - timedelta(minutes=config.run.drain_window_minutes)
+    drain_at = config.run.hard_stop_at - timedelta(minutes=config.run.drain_window_minutes - config.run.safety_buffer_minutes)
     return (drain_at - now).total_seconds() > config.execution.task_timeout_seconds
 
 
-def execute_run(config: AppConfig, run_dir: Path, entry_script: Path) -> dict[str, Any]:
+def execute_run(config: AppConfig, run_dir: Path, entry_script: Path, *, autopilot: bool = False) -> dict[str, Any]:
     queue = read_json(run_dir / "QUEUE.json")
     validate_frozen_queue(queue)
     state = read_json(run_dir / "RUN_STATE.json")
@@ -372,6 +373,18 @@ def execute_run(config: AppConfig, run_dir: Path, entry_script: Path) -> dict[st
         raise ValueError(f"run cannot start from phase {state.get('phase')}")
     if state.get("completed") or state.get("failed"):
         raise ValueError("refusing to resume a partially executed run")
+
+    if state.get("config_sha256") != config_fingerprint(config):
+        raise ValueError("configuration differs from the reviewed plan; create and review a new plan")
+    frozen_stop = datetime.fromisoformat(state["hard_stop_at"])
+    if frozen_stop.tzinfo is None:
+        raise ValueError("frozen deadline must include timezone")
+    effective_stop = min(config.run.hard_stop_at, frozen_stop)
+    if effective_stop <= datetime.now(tz=effective_stop.tzinfo):
+        raise ValueError("reviewed plan deadline has expired; create a new plan")
+    config = replace(config, run=replace(config.run, hard_stop_at=effective_stop))
+    state["hard_stop_at"] = effective_stop.isoformat()
+    state["execution_mode"] = "autopilot" if autopilot else "reviewed_queue"
 
     all_tasks: list[dict[str, Any]] = list(queue.get("tasks", []))
     state["phase"] = "execute"
@@ -393,6 +406,7 @@ def execute_run(config: AppConfig, run_dir: Path, entry_script: Path) -> dict[st
         # finds nothing new ends the run honestly — no filler tasks are invented.
         while (
             stop_reason == "queue_exhausted"
+            and autopilot
             and config.run.replan_when_queue_empty
             and not _stop_requested
             and _time_for_another_round(config)

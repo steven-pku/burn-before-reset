@@ -2,6 +2,16 @@ name: Audit finding
 description: You reviewed the code and found something — a defect, a weak guarantee, or a claim that does not hold
 labels: [audit]
 body:
+  - type: markdown
+    attributes:
+      value: "Suspected unauthorized actions or billing? Use [private vulnerability reporting](https://github.com/steven-pku/burn-before-reset/security/advisories/new). Do not post exploit details here."
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public disclosure check
+      options:
+        - label: This report contains no security exploit details, credentials, private paths or session transcripts.
+          required: true
   - type: input
     id: location
     attributes:
@@ -13,7 +23,7 @@ body:
     id: severity
     attributes:
       label: Severity
-      options: [critical — unsafe action or spend possible, high — wrong result silently, medium — wrong result visibly, low — clarity or docs]
+      options: [high — wrong result silently, medium — wrong result visibly, low — clarity or docs]
     validations:
       required: true
   - type: textarea

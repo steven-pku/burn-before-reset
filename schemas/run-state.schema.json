@@ -83,7 +83,7 @@
     },
     "source_mutation_detected": {
       "type": "boolean",
-      "description": "A source write was attributed to the Worker, which stops the run. Not the same as movement being observed — see source_movement_observed."
+      "description": "A source write was attributed to the Worker, which stops the run. Not the same as movement being observed \u2014 see source_movement_observed."
     },
     "source_movement_observed": {
       "type": "boolean",
@@ -123,11 +123,11 @@
     },
     "burn": {
       "type": "object",
-      "description": "Cumulative consumption across every worker call: the only local measure of how much expiring allowance was actually converted into work."
+      "description": "CLI-reported tokens and estimated usage cost; not an invoice, remaining quota or delivered value."
     },
     "burn_pace": {
       "type": "object",
-      "description": "Spend rate and its projection at the hard stop; under-burning with hours left is a failure to convert, not a safe outcome."
+      "description": "Projection of CLI-reported estimated usage cost at the observed pace; not a spending or value measure."
     },
     "worker_calls": {
       "type": "integer",
@@ -164,6 +164,17 @@
     },
     "finished_at": {
       "type": "string"
+    },
+    "config_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Configuration binding for new reviewed plans; older plans must be regenerated before execution."
+    },
+    "execution_mode": {
+      "enum": [
+        "reviewed_queue",
+        "autopilot"
+      ]
     }
   }
 }

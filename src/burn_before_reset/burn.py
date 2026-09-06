@@ -48,8 +48,9 @@ def burn_report(run_dir: Path | None = None, output_root: Path | None = None) ->
         f"{target.name}  ·  phase {phase}"
         + (f"  ·  stopped: {state.get('stop_reason')}" if phase == "stopped" else "  ·  running"),
         f"  tasks       {done} done, {failed} failed, {calls} worker calls, {len(state.get('rounds', []))} round(s)",
+        "  Cost figures are CLI-reported estimates, not bills, savings, remaining quota or artifact value.",
         f"  waits       {int(state.get('quota_wait_cycles', 0))} quota replenishment wait(s)",
-        f"  burned      {f'${spent:.4f}' if priced else 'not priced by this provider'}, "
+        f"  estimated   {f'${spent:.4f}' if priced else 'not priced by this provider'}, "
         f"{out_tokens:,} output tokens",
     ]
 

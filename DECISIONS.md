@@ -132,3 +132,19 @@ Record only approved decisions or approved evidence-driven reversals. Append new
 - Rationale: `v0.3.0` was tagged before the fourth external audit was adopted, so the public release lacked the round's most important fix; promoting it would have endorsed the unpatched build. The old `minimum_score` default sat below the formula's floor of 24 and had never filtered a candidate; 30 drops only a stale file carrying one weak marker and changed nothing in the first real overnight corpus (45–59).
 - Alternatives: merge without tagging and point the posts at `main`; hold the branch for Steven's own diff review; run the full video line with paid TTS now.
 - Revisit when: artifact grades arrive (they are the only input that can turn the scorer from proxy to value, and may move the floor), or a real run shows the floor discarding work worth doing.
+
+## 2026-09-06 · Implement the community-readiness audit
+
+- Status: `approved`
+- Decision maker: Steven (“同意你的建议，立即执行。”)
+- Decision: Implement the audit’s execution-boundary, first-use, README/copy, report-label, demo-asset and community-reporting improvements. Prepare a reviewable local candidate and evidence; keep existing private promotion drafts intact and prepare factual corrections separately.
+- Scope: No new paid/model run, global installation, public announcement or release is implied. Existing publication decisions remain recorded above.
+- Revisit when: Human artifact grades or a new isolated pilot supply evidence that changes the task-selection or execution assumptions.
+
+## 2026-09-07 · Publish v0.3.2 and finish release preparation
+
+- Status: `approved`
+- Decision maker: Steven
+- Decision: Push the completed remediation, finish release preparation, publish v0.3.2 and prepare the project for Steven’s promotion. Keep the public candidate positioning and truthful limits on billing and artifact value.
+- Scope: Repository commit/push/tag/Release, social preview and About updates, release checks and corrected local promotion copy. Human adoption grades remain unclaimed; no paid/model execution or global installation is required for this release.
+- Revisit when: Post-release reports or human artifact grades change the evidence supporting the public claims.

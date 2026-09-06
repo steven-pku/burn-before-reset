@@ -185,7 +185,7 @@ class ConfigTests(unittest.TestCase):
 
 
 class ClaudeCliContractTests(unittest.TestCase):
-    """`--safe-mode` is load-bearing but undocumented; preflight must probe for it.
+    """`--safe-mode` is load-bearing; preflight must probe the installed CLI for it.
 
     A CLI release that drops or renames the flag must be caught before any model
     call, not discovered as a mid-window worker exit — and never tolerated by
@@ -201,8 +201,8 @@ class ClaudeCliContractTests(unittest.TestCase):
         fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
         path = write_config(root / "config.toml", source, root / "output", enabled=True)
         text = path.read_text(encoding="utf-8").replace(
-            "[execution]\nenabled = true",
-            f'[execution]\nenabled = true\nprovider = "claude"\nclaude_binary = "{fake}"',
+            'provider = "codex"',
+            f'provider = "claude"\nclaude_binary = "{fake}"',
         )
         path.write_text(text, encoding="utf-8")
         return load_config(path)

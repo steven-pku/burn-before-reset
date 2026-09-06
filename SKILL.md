@@ -1,6 +1,6 @@
 ---
 name: burn-before-reset
-description: Burn expiring AI subscription quota into reviewable local work, then hard-stop before the reset deadline. The agent finds the most valuable unfinished work itself — from session logs, repositories, and documents — and rides inner allowance windows until the outer reset. 在额度重置前把快过期的订阅额度转成可追溯、可验收的本地成果。Triggers 触发："burn before reset", "use up my quota before it resets", "clear the backlog overnight", "run something useful before my limit resets", 烧钱 Skill, 额度重置前, 夜间清 backlog. Asks one up-front message for read scope, which subscription and roughly when it resets, billing confirmation, and whether to autopilot; refuses without read scope, a subscription and reset time, or billing confirmation. Not for Cloud Tasks, API-key billing, paid Credits, Auto top-up, provider switching, or anything that publishes, deploys, or deletes.
+description: Use before subscription quota resets. 烧钱 Skill、额度重置前、overnight backlog review. Finds bounded local work from allowed sources; requires provider, reset time and billing confirmation. Defaults to plan-only.
 ---
 
 # Burn Before Reset
@@ -24,7 +24,7 @@ required, the last three shape whether the night is worth anything.
 **1 · Which directories may I read?**
 Run `python3 scripts/bbr.py discover` first and offer the proposals — session logs rank
 first because unfinished work is recorded there whether or not the user keeps notes.
-Nothing is read that was not named here. Ask in the same breath what must stay out.
+The deterministic indexer reads only the selected roots. Discovery proposes roots from metadata; worker read confinement is weaker (see SECURITY.md). Ask what must stay out.
 
 **2 · Which subscription am I burning, and roughly when does it reset?**
 Provider (`claude` or `codex`) is a real question, not a config detail: the wrong one
@@ -67,12 +67,12 @@ Continuation is on by default (`wait_for_replenish = true`).
 
 1. Read [the risk policy](references/risk-policy.md). Read the matching reference only when the task touches a data source or task format.
 2. In autopilot, run `python3 scripts/bbr.py discover` and choose sources with judgment: session logs first (they exist for every Claude/Codex user), then recently active repositories and document trees. Drop anything sensitive; tighten `exclude_fragments`. Proposals are read-only suggestions, not a config. Set `run.report_language` to the language the user is writing in — the report is for them, and nothing else in the run can know it.
-3. Compute `hard_stop_at = reset_at - safety_buffer` from system time. Under twenty minutes remaining: refuse. Under sixty minutes: plan only.
+3. Use the earlier of `reset_at - safety_buffer` and `now + max_runtime_hours` (default 12, maximum 24); reset must be within 24 hours. Freeze that deadline in the plan. Under twenty minutes remaining: refuse. Under sixty minutes: plan only.
 4. Run `python3 scripts/bbr.py validate-config --config <config.toml>`, then `python3 scripts/bbr.py plan --config <config.toml>`.
 5. Read back `RUN_PLAN.md`, `QUEUE.json`, and `RUN_STATE.json`. Confirm the queue is frozen, every item is traceable to a source, and every item has a deliverable, a validation rule, and a write boundary.
-6. Run `python3 scripts/bbr.py run --config <config.toml> --execute` when the mode allows it: in autopilot, the up-front 看着办 answer **is** the standing authorization and execution follows planning immediately; in review mode, wait for the user to say "execute". Either way the config must set `execution.enabled = true`.
+6. Run from the repository root. For the reviewed queue use `python3 scripts/bbr.py run --config <config.toml> --run-dir <reviewed-run-dir> --execute`; this never re-plans. Use `python3 scripts/bbr.py run --config <config.toml> --autopilot --execute` only when the mode allows it: in autopilot, the up-front 看着办 answer **is** the standing authorization and execution follows planning immediately; in review mode, wait for the user to say "execute". Either way the config must set `execution.enabled = true`.
 7. The runner starts the external deadline guard before the Worker and supervises both. A lost guard, a descendant that needs cleanup, or an unconfirmed stop is a failure. Never rely on the model to stop itself.
-8. When a queue drains with usable time left, the runner re-plans from fresh signals (`replan_when_queue_empty`); a round that finds nothing new ends the run. Filler tasks are never invented — every task traces to a real signal. Work an earlier run in the same `output_root` finished is skipped unless its source moved, and named in `RUN_PLAN.md` — a restart after a crash resumes rather than redoes.
+8. In explicitly authorized autopilot only, when a queue drains with usable time left, the runner re-plans from fresh signals (`replan_when_queue_empty`); a round that finds nothing new ends the run. Filler tasks are never invented — every task traces to a real signal. Work an earlier run in the same `output_root` finished is skipped unless its source moved, and named in `RUN_PLAN.md` — a restart after a crash resumes rather than redoes.
 9. Read back `MORNING_REPORT.md` and `STOP_REASON`. No read-back, a failed validation, a timeout, or an empty result means the run is not a success. `REPORT.html` is the user's copy of the same night — hand them the path; never paraphrase it.
 
 ## Non-negotiable rules
@@ -102,12 +102,15 @@ Continuation is on by default (`wait_for_replenish = true`).
 
 ## Output contract
 
-Every run directory contains:
+Planning creates the following files (no model calls or completed artifacts):
 
 - `RUN_PLAN.md` — the plan as frozen, including what was skipped as already answered; read back at step 5
 - `CANDIDATES.jsonl` — every scored candidate, before the freeze
 - `QUEUE.json` and `RUN_STATE.json` — the frozen queue and the live state; read back at step 5
 - `CHECKPOINTS.md` and `events.jsonl` — per-task progress and the raw event log behind the receipts
+
+After execution stops, the directory also contains:
+
 - `artifacts/` — deliverables promoted from completed Worker runs; failed output stays diagnostic under `workers/`
 - `MORNING_REPORT.md`, `STOP_REASON`, and `REPORT.html` — read back at step 9; the page is the user's copy
 

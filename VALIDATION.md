@@ -1,10 +1,10 @@
 # Burn Before Reset · Validation · 2026-08-24
 
-## Result
+## Initial result · 2026-08-24
 
 Lifecycle is `candidate`. Implementation, structural checks, historical replay, controlled forward test, repository fresh-process discovery, and the post-audit safety repair suite passed. A pre-publication audit then reproduced four further defects; each was repaired with a regression test that fails against the previous behaviour, and one real Codex task subsequently ran end to end through the product adapter. `PROMOTION_GATE` stands at 1 of 3. The project is not installed globally, is not `verified`, and is not proven safe for unattended sensitive data.
 
-> This file is a ledger. Sections are appended in order. Earlier entries record what was true when they were written and are not rewritten; the pre-publication section at the end supersedes counts and gate states above it.
+> This file is a ledger. Sections are appended in order. Earlier entries record what was true when they were written and are not rewritten; later dated sections supersede earlier counts and gate states. In particular, the 2026-08-25 coverage entry records 3/3, and A21 supersedes the earlier description of `--safe-mode` as removing built-in tools. Read STATUS for current operating state; do not treat this initial result as the current gate summary.
 
 ## Mechanical checks
 
@@ -794,3 +794,50 @@ incomplete, and a README-wide casing sweep beyond the four role lines fixed.
   artifact grades remain the only input that could turn the scorer from proxy to value.
 - A29 hashes the prefix the indexer reads plus the file size. A change entirely past
   the byte cap that leaves the size identical is not detected. Recorded, not fixed.
+
+## 2026-09-06 · Community-readiness remediation (local candidate)
+
+Audited against the current working tree at `ed01270`, preserving pre-existing governance edits. This entry describes local preparation; it does not claim a new real worker run, deployment, GitHub CI run or human acceptance of artifacts.
+
+| Finding | Change and evidence |
+|---|---|
+| Distant reset and no independent ceiling | Reject reset beyond 24 hours; freeze the earlier of reset minus safety buffer and `max_runtime_hours` (default 12, allowed 2–24). Dispatch/drain and guards use the effective deadline. |
+| Reviewed plan silently replaced/extended | CLI requires `--run-dir` or explicit `--autopilot`; reviewed runs never re-plan. Configuration fingerprint binds sources/provider/policy/limits. Reloading cannot extend the stored deadline. Older unbound plans refuse execution. |
+| Implicit provider and pre-asserted real billing template | Execution requires an explicitly named provider. Template reset/provider are invalid placeholders; the three user billing assertions start false. A separate no-model demo supplies fictional input and proves execution remains disabled. |
+| Closed Markdown work returned as live signals | Skip completed/cancelled checkboxes, block quotations and fenced examples; preserve open tasks in mixed documents. This is syntax filtering, not full historical resolution of session transcripts. |
+| Git worktrees omitted | Discovery accepts `.git` marker files as well as directories. Discovery is a proposal, not repository integrity verification. |
+| Claim reviews counted as confirmed claims | Neutral bilingual review/decision labels; an uncheckable synthetic result no longer displays “claim verified”. Handoff selection wording says queued, not sent. |
+| Dollar totals implied spend/value | CLI, Markdown and HTML reports identify estimated usage cost. Existing numeric JSON keys remain compatible. Figures do not establish actual charges, savings, remaining quota or artifact usefulness. |
+| First-use and contribution commands failed | `scripts/demo.py` creates and validates a real throwaway plan and separate clearly marked illustrative reports. `scripts/check.py` sets the source path for the same hermetic suite used by CI. |
+| Public presentation drift | English/Chinese README, report screenshot and reproducible VHS tape/GIF refreshed; current documented Claude flags linked; Windows execution no longer implied. Package 0.3.2 is an unreleased candidate. |
+| No actionable private security channel | GitHub API returned disabled; approved remediation enabled private reporting; independent GET returned `enabled: true`. SECURITY and issue guidance now link directly to the private channel. |
+
+### Validation
+
+- 167 hermetic unit/integration tests pass; pinned ruff 0.16.5 is clean.
+- Red/green: all nine cases in `test_community_readiness.py` failed on the untouched pre-repair snapshot, then passed. `EvidenceLabelTests` failed against pre-repair source and passes after. No real provider calls were used.
+- Fresh no-model demo: valid plan, source hash unchanged, execution disabled, bilingual illustrative HTML generated. Example template refuses before execution. Local README/Skill/document links resolve.
+- Report screenshot viewed in the browser; demo GIF regenerated with the committed VHS tape and final frame inspected. Sample report explicitly labels fictional data. Social asset remains 1280×640 and under 1 MB; live social-card replacement is pending publication.
+- Skill description: 204 characters, below the local 300-character cap; repository discovery links remain unchanged. A new model session was not launched to test trigger reliability.
+- Current official sources: [GitHub private reporting API](https://docs.github.com/en/rest/repos/repos#enable-private-vulnerability-reporting-for-a-repository), [Claude CLI reference](https://code.claude.com/docs/en/cli-reference), [Claude costs](https://code.claude.com/docs/en/costs#using-the-usage-command). Checked 2026-09-06.
+
+### Correction Review
+
+- Correction: replace permissive setup and ambiguous execution/report claims with explicit modes, bounded deadlines and qualified evidence.
+- Evidence: pre-repair failing tests, repaired suite, no-model first-use smoke check and independent GitHub setting readback.
+- Root cause: demonstration defaults had become real-run defaults; plan review and autopilot shared an implicit entry point; presentation inferred outcomes from task labels and usage totals.
+- Prevention: mechanical configuration/deadline binding, explicit execution choice, dedicated demo path and adversarial report-label regression.
+- Remaining: human grading, a separately authorized real pilot of the new bounds, fresh agent discovery/trigger validation, and publication of this candidate. This pass does not establish stronger OS-level read confinement or zero server-side billing.
+
+## 2026-09-07 · v0.3.2 publication checks
+
+Steven explicitly approved pushing the remediation and completing release preparation before promotion. Human artifact grades remain a follow-up measurement; this release makes no claim that they are complete.
+
+- Release-tree checks: 167 hermetic unit/integration tests pass; ruff 0.16.5 passes; `quick_validate.py` reports a valid Skill; all local README/Skill/security/contribution links resolve; `git diff --check` passes.
+- First-use check from the isolated release tree: the demo creates a validated plan, preserves the source checksum, refuses execution and generates labelled English/Chinese illustrative reports without a model.
+- Fresh Codex process: exactly one repository Skill inventory entry; startup stderr is empty. The catalog advertises a shortened description as expected. This proves discovery, not model-trigger reliability.
+- A local rollback copy named `SKILL.md` was discovered as a second Skill. It is now preserved as `SKILL.md.snapshot`; a second genuinely new process confirmed the duplicate is gone. Private rollback material is excluded from the release tree.
+- Package metadata, CHANGELOG, README and Release notes agree on v0.3.2. The release tree contains no private promotion folder, local configurations, personal home paths or new credential-like strings under the targeted publication scan.
+- Remote Actions, the version tag and GitHub Release are checked after pushing this commit. Their server records are the authoritative publication receipts; this pre-push entry does not claim those actions have already completed.
+
+No new real model pilot, paid fallback, global installation, server-side balance verification or human adoption measurement is claimed by this release.

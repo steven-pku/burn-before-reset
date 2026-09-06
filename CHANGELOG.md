@@ -12,6 +12,23 @@ record of what has actually been proven.
 
 Nothing yet.
 
+## [0.3.2] — 2026-09-07
+
+### Added
+
+- No-model first-use demo with a real validated plan and separately labelled sample reports.
+- One test command shared by contributors and CI, plus proposed release-tag/version checking.
+- Independent runtime ceiling (12 hours by default, maximum 24) and configuration binding for reviewed plans.
+
+### Changed
+
+- **Execution migration:** `run` now requires either `--run-dir` or `--autopilot`. Reviewed queues never re-plan. Regenerate older plans before execution.
+- Reset must be within 24 hours; execution requires an explicitly selected provider. The real-run template requires actual reset, source and billing confirmation.
+- Completed/cancelled Markdown tasks, quotations and fenced examples no longer become open-work signals; discovery recognizes Git worktree marker files.
+- README, Chinese introduction, report screenshot and terminal demo now share a reproducible first-use flow.
+- Report labels distinguish claim reviews from verified claims, local handoff selection from sending, and CLI cost estimates from bills or value.
+- Security reporting links, issue guidance and current Claude flag documentation are aligned. Package metadata and release version are aligned at 0.3.2.
+
 ## [0.3.1] — 2026-09-02
 
 ### Fixed

@@ -92,7 +92,7 @@ def _work_tree_proposals(home: Path, now: float) -> list[SourceProposal]:
                 dirnames[:] = []
                 continue
             markdown = [name for name in filenames if name.endswith(".md")]
-            is_git = (current / ".git").is_dir()
+            is_git = (current / ".git").is_dir() or (current / ".git").is_file()
             if not is_git and len(markdown) < 5:
                 continue
             newest = max((_recent(current / name) for name in markdown), default=_recent(current))

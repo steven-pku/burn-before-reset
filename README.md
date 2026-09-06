@@ -4,163 +4,119 @@
 [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square)](pyproject.toml)
 
-English · [中文](./README.zh-CN.md)
+English · [中文](README.zh-CN.md)
 
 **Don’t burn tokens. Burn down your backlog.**
 
-Burn Before Reset turns expiring subscription quota into useful, reviewable work the agent finds on its own — from session logs, repositories, and documents — then hard-stops before a user-supplied outer reset. A closed inner allowance window pauses the run; only the outer reset ends it.
+Turn expiring Codex or Claude Code subscription quota into local work you can review: decision briefs, claim reviews, blocker analyses and patch plans. Burn Before Reset finds candidates in sources you select, runs a bounded queue, and stops before your confirmed reset time or an independent runtime ceiling.
 
-It indexes only sources you explicitly allow, builds a traceable candidate list, freezes a bounded queue, checkpoints every task, and produces one Morning Report. Token use is a constraint, not a KPI.
+**Public candidate. Start with the no-model demo below.** Execution has been exercised on one machine; it is not proven safe for unattended use with sensitive data. [Evidence and remaining limits](VALIDATION.md).
 
-<img alt="Plan-only quick start: validate-config, plan, and the run directory it writes" src="assets/demo.gif" width="700" />
+<img alt="Illustrative report with one decision brief and one claim review. Sample data; no model calls." src="assets/report.jpg" width="900" />
 
-The demo above is generated from [assets/demo.tape](assets/demo.tape) with [vhs](https://github.com/charmbracelet/vhs) — plan-only, against throwaway demo sources.
+*Sample data, not a real run or a value claim.* The self-contained report groups artifacts, links to their source, and lets you prepare a handoff brief. Adding an item to the list sends nothing; copy the brief to your agent when you want to continue.
 
-## What you wake up to
+[Try it](#try-it-without-a-model) · [Run real work](#run-real-work) · [Safety](#safety-model) · [Evidence](#current-status) · [Contribute](CONTRIBUTING.md) · [Security reports](SECURITY.md)
 
-One page, generated from the run's own receipts — never written by the agent. It opens with a verdict on what was delivered, groups the work by kind, and lets you queue any artifact for your agent with a copy-paste handoff brief.
+## Try it without a model
 
-<img alt="REPORT.html: proverb verdict, work grouped by kind, fact tiles, and a handoff action" src="assets/report.png" width="900" />
+Requires **Python 3.11+ and Git on macOS or Linux**. No Python dependencies, account login, model CLI or quota are needed for the demo.
 
-The page is self-contained (no network requests), speaks the user's language (`run.report_language`), and renders a failed night as carefully as a good one. The Markdown twin, `MORNING_REPORT.md`, is what the agent reads back.
+```bash
+git clone https://github.com/steven-pku/burn-before-reset.git
+cd burn-before-reset
+python3 scripts/demo.py
+```
 
-**Contents**: [Status](#current-status) · [Safety model](#safety-model) · [Quick start](#quick-start) · [Exit codes](#exit-codes) · [What it does](#what-it-does) · [What it does not do](#what-it-does-not-do) · [Layout](#repository-layout) · [Agents](#which-agents-can-run-this) · [License](#license)
+Expected output starts with `DEMO READY — no model, login or quota used`. Open the printed `Sample report` path in your browser; `REPORT.zh.html` beside it is the Chinese version. The separate `Plan` directory contains a real validated queue built from a throwaway source, which is checked to remain unchanged. Demo billing assertions are fictional; use the real template below for your own work.
 
-## Current status
+<details>
+<summary>See the reproducible terminal demo</summary>
 
-**Public candidate. Not proven safe for unattended use.**
+<img alt="The demo command generates a plan and clearly labelled sample report without model calls" src="assets/demo.gif" width="700" />
 
-Lifecycle is `candidate`. `PROMOTION_GATE` is satisfied at 3 of 3: real Codex tasks have run end to end through the product adapter across two source types, and the deadline guard has been observed killing a live Codex process group. Since then the tool has done the thing it exists to do once, for real: an unattended overnight autopilot run against a genuinely expiring weekly allowance — 25 tasks completed, 27 artifacts, $71.38, and the allowance driven to the provider's own refusal. That night surfaced four defects, each repaired with a regression test that fails against the previous behaviour. Nothing here is installed globally, and `verified` is still not claimed: that also requires a decision about installation targets.
+Regenerate with `vhs assets/demo.tape` from this checkout. See the [tape](assets/demo.tape).
+</details>
 
-Read that as: the safety machinery is tested, the happy path has been exercised at overnight scale, and the hard stop has actually fired against a real process — on one machine, one user's sources, almost entirely in `safe` mode. `balanced` mode has run for real exactly once (two tasks, sources byte-identical afterwards) and remains the least-exercised path. The default path is plan-only, and it should stay that way until you have watched `--execute` behave on your own sources. See [VALIDATION.md](VALIDATION.md) for the full gate ledger and the risks that remain open.
+## Run real work
 
-## Safety model
+You also need a locally authenticated Codex CLI or Claude Code CLI. Commands below run **from this repository root**. Read [SECURITY.md](SECURITY.md) before enabling execution.
 
-- User supplies an absolute reset timestamp with timezone.
-- Default hard stop is fifteen minutes before reset; values below ten minutes are rejected.
-- Execution becomes mechanically plan-only inside sixty minutes of the hard stop.
-- Unknown Credits balance, unknown Auto top-up state, API-key environment variables, or billing/rate-limit errors fail closed.
-- Environment variables that could supply a key or redirect the endpoint are withheld from the Worker and listed in `DROPPED_ENV.txt`. Proxy variables are kept: they change the network route, not the billed account.
-- Billing and auth failures are read from the Worker's diagnostics, never from the artifact it wrote. An artifact that merely discusses pricing or rate limits is still delivered.
-- Planner never modifies source roots, and reads Git status without touching the repository index.
-- No delete, push, merge, deploy, publish, message, purchase, credential change, provider fallback, or Cloud Task.
-- A supervised watchdog controls the local Worker process group; guard loss or unconfirmed shutdown fails the task.
-- Each round's queue freezes before it is worked and is never added to; a drained queue with time left triggers a fresh frozen round, and a round that finds nothing ends the run instead of inventing work.
-- Worker prompts omit source snippets and treat locator metadata as untrusted data, not instructions.
-- Rehashed queues still reject unsafe task IDs and deliverable traversal; runtime task roots are rebound to configured sources and the current run directory.
-- Only a completed Worker `agent_message` that passes every safety check is promoted into `artifacts/`; failed output stays diagnostic.
-
-Important: Codex's standard sandbox constrains writes but does not provide a repository-specific read allowlist. Until stronger OS-level confinement is validated, use `plan` for sensitive data and treat `--execute` as an isolated pilot.
-
-## Quick start
-
-Requires Python 3.11+, Git, and a locally authenticated Codex CLI or Claude Code CLI (set `execution.provider`).
+1. Copy `examples/config.example.toml` to `config.local.toml`.
+2. Supply the actual reset time from your provider’s official usage UI, including timezone. Start within 24 hours of it. Choose `execution.provider = "codex"` or `"claude"`, set the source paths, and choose a durable output directory outside those sources.
+3. Check your account and set the three billing assertions to `true` only when confirmed. Keep API keys, paid credits and fallback disabled. These are your assertions, not automated account checks.
+4. Keep `execution.enabled = false` while planning. Set a small launch cap and task count for your first pilot. The template uses 20 launches and 3 tasks per round.
 
 ```bash
 cp examples/config.example.toml config.local.toml
-# Edit config.local.toml first: replace the /absolute/path/to/... placeholders
-# with your real source roots, and point output_root somewhere durable.
+# Edit the fields above before continuing.
 python3 scripts/bbr.py validate-config --config config.local.toml
 python3 scripts/bbr.py plan --config config.local.toml
 ```
 
-`validate-config` refuses placeholder paths with exit `2` — that is the gate working, not a bug. Once it prints `"valid": true`, `plan` writes a run directory under `output_root`.
+The unedited template intentionally refuses with exit `2`. A successful `plan` prints a run directory. Review its `RUN_PLAN.md`, `CANDIDATES.jsonl` and `QUEUE.json`. It has not called a model or produced completed artifacts.
 
-Review the generated `RUN_PLAN.md`, `CANDIDATES.jsonl`, and frozen `QUEUE.json` before any Worker run.
-
-Execution is deliberately double-gated:
+Set `execution.enabled = true`, then choose **one** execution mode:
 
 ```bash
-python3 scripts/bbr.py run --config config.local.toml --execute
+# Execute exactly the queue you reviewed. Replace the path with the printed directory.
+python3 scripts/bbr.py run --config config.local.toml --run-dir /path/to/reviewed-run --execute
+
+# Or explicitly authorize initial planning and follow-up rounds within the same bounds.
+python3 scripts/bbr.py run --config config.local.toml --autopilot --execute
 ```
 
-The command still refuses unless `execution.enabled = true` and every safety assertion passes.
+A reviewed queue never gains follow-up tasks, even when `replan_when_queue_empty = true`. Changes to the provider, sources, reset or limits require a new plan; enabling execution alone is allowed. Plans made before the configuration-binding feature must be regenerated. Every execution path still requires all safety gates to pass.
+
+After execution stops, open `REPORT.html` or read `MORNING_REPORT.md` in the run directory. Use `STOP_REASON` and `events.jsonl` to investigate an incomplete run. Artifact completion means a worker result passed the runner’s checks; it does not certify that its conclusions are correct or useful.
+
+## Safety model
+
+- **Bounded time:** reset must be within 24 hours. `max_runtime_hours` defaults to 12 and cannot exceed 24. The earlier of that ceiling and reset minus the safety buffer is frozen in the plan. Reloading cannot extend it.
+- **Early stop:** default safety buffer is 15 minutes; less than 10 is rejected. New execution is refused inside 60 minutes of the effective hard stop. Dispatch drains before that stop so task timeouts can fit.
+- **Explicit cost boundary:** subscription-only assertions must be confirmed; API keys, paid credits and provider fallback are rejected. Credential and endpoint environment variables are withheld from workers. The tool cannot verify balances or guarantee server-side billing.
+- **Local work:** the planner never writes to sources. Workers produce artifacts in a separate run directory. No push, merge, deploy, publication, messaging or purchase is part of the workflow.
+- **Supervised workers:** a watchdog controls each local worker process group. Lost guards, attributable source writes and unconfirmed shutdowns stop the run. Between workers, the supervisor enforces the deadline.
+- **Reviewable queues:** each queue is frozen and hashed. Reviewed mode uses one queue; explicitly selected autopilot may create fresh rounds. All attempts and quota retries count toward `max_worker_calls_per_run`.
+- **Provider refusal:** recognized temporary allowance limits may pause and retry when enabled, within the deadline. Billing/auth errors stop the run. Textual matching cannot always distinguish an allowance limit from another rate limit.
+
+Codex’s standard sandbox constrains writes but does not provide a project-specific read allowlist. Claude’s read tools also have a broader read boundary than the deterministic indexer. Treat execution as an isolated pilot and keep sensitive data outside the worker environment. See the complete [supported boundaries](SECURITY.md).
+
+## Current status
+
+**v0.3.2 — explicit execution modes and a no-model first-use demo.** See the [release notes](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.2) and [changelog](CHANGELOG.md).
+
+One real overnight exercise completed **25 tasks and produced 27 artifacts across three runs**. The CLI reported **$71.38 in estimated usage cost**, and the provider eventually refused further work. This does not establish a zero remaining balance. Dollar estimates are not subscription charges, savings or artifact value; [Claude’s cost documentation](https://code.claude.com/docs/en/costs#using-the-usage-command) explains the distinction. Human usefulness grades remain outstanding.
+
+Real Codex tasks and a live deadline stop have also been observed; `balanced` mode has only one small real exercise. Tests and synthetic demos cover more scenarios, but are not evidence of reliable unattended operation across accounts and environments. Full receipts and known gaps are in [VALIDATION.md](VALIDATION.md).
 
 ## Exit codes
 
-`run` reports whether the queue was worked to the end, not merely whether the process survived. Wrap it accordingly.
-
 | Code | Meaning |
 |---|---|
-| `0` | The queue was exhausted with no failed task. This is the only success. |
-| `1` | The run stopped early. Read `STOP_REASON`: `deadline_guard`, `drain_window`, and `quota_exhausted` are correct, designed stops; `billing_or_auth_error`, `source_mutation_detected`, `guard_failure`, and `stop_unconfirmed` are not. `worker_reported_error` means the provider refused in words this tool could not classify — its message is in the Morning Report. |
-| `2` | The command refused before doing anything: a gate failed, the config was rejected, or `--execute` was missing. |
+| `0` | Queue exhausted with no failed task. Review artifact quality separately. |
+| `1` | Incomplete or failed run. Read `STOP_REASON`; deadline, drain and allowance stops can be expected outcomes. |
+| `2` | Command refused or errored: configuration, execution mode, preflight or command failure. Read stderr; inspect any existing run receipts. |
 
-A `1` from a deadline stop means "ran out of time as designed", so treat it as an incomplete run rather than a fault, and read `MORNING_REPORT.md` — or open `REPORT.html`, the same night as a page — before deciding.
+## Agent support and repository layout
 
-## What it does
+Start Codex CLI or Claude Code in this checkout to discover the repository-scoped Skill. `.agents/skills/` and `.claude/skills/` link back to the root `SKILL.md`; no global installation is needed. Windows execution is not supported or covered by CI.
 
-- One up-front mode question — review the plan, or full autopilot — then hands-off.
-- A user-facing `REPORT.html` beside the Markdown report: fixed-format, deterministic, bilingual, with a handoff brief for the artifacts you want continued.
-- Cross-run de-duplication: work an earlier run already finished is skipped until its source moves, and every skip is named in `RUN_PLAN.md`.
-- Source discovery without a note vault: `bbr discover` proposes session-log,
-  repository, and document roots by recent activity, read-only.
-- Riding inner allowance windows: on `usage limit`, the supervisor sleeps and retries
-  the same task until the window reopens; only the outer `reset_at` is a hard stop.
-- Re-planning rounds: a drained queue with usable time left is refilled from fresh
-  signals; a round that finds nothing ends the run honestly.
-- Strict preflight and deadline computation.
-- Deterministic, allowlisted Markdown/session/repository indexing.
-- Candidate extraction and value/risk scoring.
-- Immutable frozen queue and atomic run state.
-- Sequential local Worker adapter — Codex CLI or Claude Code — with full event capture.
-- Supervised deadline watchdog, confirmed-stop receipts, checkpoints, stop reason, and Morning Report even on ordinary Worker exceptions.
-- Dry-run and fake-worker integration tests.
+Codex workers use `codex exec` with the selected sandbox (`safe` or `balanced`). Claude workers support `safe` only, using `Read,Grep,Glob`, `--restricted`, `--safe-mode` and an empty strict MCP configuration. These flags serve different purposes: safe mode disables customizations; it does not itself remove built-in tools. They are documented in the [Claude CLI reference](https://code.claude.com/docs/en/cli-reference) as of 2026-09-06; preflight still checks the installed CLI for every required flag.
 
-## What it does not do
+| Path | Purpose |
+|---|---|
+| `SKILL.md` | Agent workflow, scope and authorization |
+| `scripts/bbr.py` | Local CLI |
+| `scripts/demo.py` | No-model first-use demo |
+| `scripts/check.py` | Local and CI test entry point |
+| `src/burn_before_reset/` | Planner, runner and reports |
+| `examples/` | Real-run configuration template |
+| `references/`, `task-packs/` | Source adapters, task contracts and recipes |
+| `schemas/`, `tests/` | Machine contracts and regression checks |
 
-- Read quota/reset data from undocumented endpoints.
-- Guarantee server-side billing behavior.
-- Observe the server-side quota pool, credit balance, or replenishment schedule. It stops on the clock you give it (`reset_at`), on provider refusals, and on the `max_worker_calls_per_run` backstop — it cannot promise that only expiring quota is burned.
-- Use API keys, paid Credits, provider fallback, or cloud jobs.
-- Mutate original Vaults or repositories.
-- Integrate patches, open PRs, create remotes, or push.
-- Invent filler tasks to burn quota: every task traces to a real signal in a real source.
+## Help and contributions
 
-## Repository layout
-
-```text
-SKILL.md                 Agent workflow and activation gate
-scripts/bbr.py           Local CLI entry point
-src/burn_before_reset/   Deterministic runner
-references/              Risk, task contract, adapters, research
-task-packs/              Bounded candidate-generation recipes
-schemas/                 Task and run-state contracts
-tests/                   Unit and integration tests
-examples/                Safe configuration example
-.agents/skills/          Skill discovery for Codex CLI
-.claude/skills/          Skill discovery for Claude Code
-```
-
-Both skill directories hold a symlink back to the repository root, so a session started
-inside this checkout finds `SKILL.md` with no global install. The two exist because the
-agents look in different places: Codex reads `.agents/skills/`, Claude Code reads
-`.claude/skills/` in the working directory and every parent up to the repository root.
-Git checkouts on Windows without symlink support materialise them as text files
-containing `../..`; the CLI and the tests are unaffected.
-
-## Which agents can run this
-
-The Skill file itself is portable — plain `SKILL.md` with `name` and `description`
-frontmatter — and both Codex CLI and Claude Code discover it from this checkout.
-
-**Two Worker adapters ship.** `execution.provider = "codex"` shells out to
-`codex exec` under its sandbox (`safe` or `balanced`). `execution.provider = "claude"`
-shells out to Claude Code headless, `safe` mode only: the Worker is launched with
-`--tools Read,Grep,Glob` as a closed allowlist, `--restricted` (the documented flag
-that removes the code-running tools and WebFetch), `--safe-mode` (which disables user
-customisations — without it a probe reached a connected cloud-storage write tool), and
-an empty strict MCP configuration — read-only because the write tools are absent, not
-merely denied. `--safe-mode` is not in the published CLI reference, so preflight probes
-`claude --help` for it and every other load-bearing flag, and refuses the run if any
-is missing. Running out of
-allowance mid-run ends the run as `quota_exhausted`, an ordinary stop distinct from
-`billing_or_auth_error`. Other agents can still *discover* the Skill without being able
-to *execute* it — read the boundary before assuming "works with my agent" means "runs
-with my agent".
-
-See [SECURITY.md](SECURITY.md) before enabling execution and [research-2026-08-24.md](references/research-2026-08-24.md) for the evidence and competitor comparison.
-
-## License
+Use [GitHub Issues](https://github.com/steven-pku/burn-before-reset/issues) for bugs and reproducible non-security findings. For boundary escapes or unintended billing, use [private vulnerability reporting](https://github.com/steven-pku/burn-before-reset/security/advisories/new). Read [CONTRIBUTING.md](CONTRIBUTING.md) for the same checks CI runs.
 
 MIT — see [LICENSE](LICENSE).

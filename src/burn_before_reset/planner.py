@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .config import AppConfig
+from .config import AppConfig, config_fingerprint
 from .indexer import index_all
 from .model import SourceRef, TaskSpec
 from .state import TASK_ID_PATTERN, freeze_queue, read_json, write_json_atomic, write_text_atomic
@@ -694,6 +694,7 @@ def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
         "reset_at": config.run.reset_at.isoformat(),
         "hard_stop_at": config.run.hard_stop_at.isoformat(),
         "queue_sha256": queue["tasks_sha256"],
+        "config_sha256": config_fingerprint(config),
         "task_status": {task.id: "queued" for task in queued},
         "completed": [],
         "failed": [],

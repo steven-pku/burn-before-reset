@@ -5,7 +5,7 @@ Burn Before Reset is a local automation prototype, not a billing-control product
 ## Supported boundary
 
 - Local CLI workers only: Codex CLI, or Claude Code in `safe` mode.
-- The Claude worker's read-only guarantee is tool absence, not denial: it is launched with `--tools Read,Grep,Glob` as a closed allowlist, `--restricted` (which removes the code-running tools and WebFetch and ignores user/project settings — the documented tool-removal flag; `--safe-mode` alone leaves built-in tools in place), `--safe-mode`, and an empty strict MCP map. Without `--safe-mode` a probe reached a connected cloud-storage write tool, so that flag is load-bearing. `--safe-mode` is not listed in the published CLI reference, so it is treated as an observed capability rather than a stable contract: preflight parses `claude --help` and refuses the run if it — or any other flag the worker command depends on — is not advertised. Dropping the flag and relying on `--tools` alone is not a fallback; that reopens the MCP write-tool exposure.
+- The Claude worker's read-only guarantee is tool absence, not denial: it is launched with `--tools Read,Grep,Glob` as a closed allowlist, `--restricted` (which removes the code-running tools and WebFetch and ignores user/project settings — the documented tool-removal flag; `--safe-mode` alone leaves built-in tools in place), `--safe-mode`, and an empty strict MCP map. Without `--safe-mode` a probe reached a connected cloud-storage write tool, so that flag is load-bearing. Both flags are in the [official CLI reference](https://code.claude.com/docs/en/cli-reference) as of 2026-09-06. Preflight still probes `claude --help` and refuses a CLI missing any required flag. Dropping the flag and relying on `--tools` alone is not a fallback; that reopens the MCP write-tool exposure.
 - The Claude worker's READ scope is its working directory plus the granted source roots — Read/Grep are unprompted in the cwd and `--add-dir` only ever widens it. The worker is therefore pinned to the empty staging directory as cwd; it is not confined to the allowlist the deterministic indexer uses, and a tool it attempts without a grant fails the task (`PermissionDenied`) rather than merely being logged.
 - The deadline guard is per-task. Between tasks, during replenishment waits, and during re-planning, the outer hard stop is enforced by the supervisor's own checks (bounded sleeps, per-task dispatch checks), not by an independent watchdog process. A wait or re-index cannot launch work past the hard stop, but the supervisor process itself may outlive it briefly.
 - For the Codex worker in `balanced` mode, "no external actions" rests on the Codex sandbox plus the Worker prompt; this repository adds no mechanical network/push gate of its own beyond the sandbox flag it passes. Treat that claim as sandbox-strength, not proof.
@@ -21,6 +21,10 @@ Burn Before Reset is a local automation prototype, not a billing-control product
 - Raw or failed Worker output is never promoted into the official artifact directory.
 - The watchdog controls local processes only. It cannot cancel cloud tasks or reverse server-side usage.
 - The tool holds no spend authority. It observes local time, exit codes, and provider refusal text — never the server-side quota pool, credit balance, or replenishment schedule — so it can only stop on the clock the user asserted (`reset_at`), on provider refusals, and on `execution.max_worker_calls_per_run`, an absolute per-run cap on worker launches (first attempts, quota retries, and re-planned rounds all count). It cannot promise that only expiring quota is burned; keeping auto top-up and paid credits disabled at the account is the user's half of that boundary.
+
+## Time and review boundaries
+
+Reset must be within 24 hours. `run.max_runtime_hours` defaults to 12 (maximum 24); the earlier stop is frozen when planning. A reviewed run is bound to its configuration and never gains follow-up tasks. `--autopilot` explicitly permits fresh rounds within the same bounds. Old plans without a configuration fingerprint must be regenerated. These controls bound local work, not server-side billing.
 
 ## Two detection boundaries worth knowing
 
@@ -38,7 +42,7 @@ Codex's standard `read-only` and `workspace-write` sandboxes constrain writes bu
 
 Do not use this project to bypass limits, buy Credits, enable auto top-up, switch to API-key billing, deploy, push, merge, message people, alter credentials, or modify production systems.
 
-Report security issues privately to the maintainer before public disclosure. Do not include credentials, session transcripts, or private paths in a report.
+Use [GitHub private vulnerability reporting](https://github.com/steven-pku/burn-before-reset/security/advisories/new) for suspected boundary escapes or unintended billing. This is a private report to the maintainer; do not open a public issue. Do not include credentials, session transcripts, or private paths in a report.
 
 ## Source movement and attribution (since 0.3.0)
 

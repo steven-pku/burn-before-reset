@@ -63,7 +63,7 @@ class QuotaContinuationTests(unittest.TestCase):
             )
             config = load_config(config_path)
             run_dir = plan_run(config)
-            state = execute_run(config, run_dir, _entry_script())
+            state = execute_run(config, run_dir, _entry_script(), autopilot=True)
             state["_validate"] = validate_run(run_dir)
             return state
 
@@ -110,7 +110,7 @@ class ReplanRoundTests(unittest.TestCase):
             first_queue = json.loads((run_dir / "QUEUE.json").read_text(encoding="utf-8"))
             self.assertEqual(len(first_queue["tasks"]), 1)
 
-            state = execute_run(config, run_dir, _entry_script())
+            state = execute_run(config, run_dir, _entry_script(), autopilot=True)
             self.assertEqual(state["stop_reason"], "queue_exhausted")
             self.assertEqual(len(state["completed"]), 2, "the second file was never picked up")
             self.assertEqual(len(state["rounds"]), 2)
@@ -129,7 +129,7 @@ class ReplanRoundTests(unittest.TestCase):
             )
             config = load_config(config_path)
             run_dir = plan_run(config)
-            state = execute_run(config, run_dir, _entry_script())
+            state = execute_run(config, run_dir, _entry_script(), autopilot=True)
             self.assertEqual(state["stop_reason"], "queue_exhausted")
             self.assertEqual(len(state["completed"]), 1)
             self.assertEqual(len(state["rounds"]), 1, "no filler round should be invented")
@@ -313,8 +313,8 @@ class AuditFixTests(unittest.TestCase):
             fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
             config_path = write_config(root / "config.toml", source, root / "output", enabled=True)
             text = config_path.read_text(encoding="utf-8").replace(
-                "[execution]\nenabled = true",
-                f'[execution]\nenabled = true\nprovider = "claude"\nclaude_binary = "{fake}"',
+                'provider = "codex"',
+                f'provider = "claude"\nclaude_binary = "{fake}"',
             )
             config_path.write_text(text, encoding="utf-8")
             config = load_config(config_path)
@@ -346,8 +346,8 @@ class AuditFixTests(unittest.TestCase):
             fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
             config_path = write_config(root / "config.toml", source, root / "output", enabled=True)
             text = config_path.read_text(encoding="utf-8").replace(
-                "[execution]\nenabled = true",
-                f'[execution]\nenabled = true\nprovider = "claude"\nclaude_binary = "{fake}"',
+                'provider = "codex"',
+                f'provider = "claude"\nclaude_binary = "{fake}"',
             )
             config_path.write_text(text, encoding="utf-8")
             config = load_config(config_path)
@@ -375,7 +375,7 @@ class AuditFixTests(unittest.TestCase):
                 write_config(root / "config.toml", source, root / "output", enabled=True, codex_binary=str(fake))
             )
             run_dir = plan_run(config)
-            execute_run(config, run_dir, _entry_script())
+            execute_run(config, run_dir, _entry_script(), autopilot=True)
             self.assertEqual(validate_run(run_dir), [])
 
             state_path = run_dir / "RUN_STATE.json"
@@ -449,11 +449,11 @@ class BurnLedgerTests(unittest.TestCase):
                 write_config(root / "config.toml", source, root / "output", enabled=True, codex_binary=str(fake))
             )
             run_dir = plan_run(config)
-            state = execute_run(config, run_dir, _entry_script())
+            state = execute_run(config, run_dir, _entry_script(), autopilot=True)
             self.assertEqual(state["burn"]["output_tokens"], 22)
             self.assertIn("hours_remaining", state["burn_pace"])
             report = (run_dir / "MORNING_REPORT.md").read_text(encoding="utf-8")
-            self.assertIn("## Burn", report)
+            self.assertIn("## Reported usage", report)
             # The window closed with hours unused: that is unconverted quota and
             # the report must say so rather than presenting it as a clean finish.
             self.assertIn("left unused", report)

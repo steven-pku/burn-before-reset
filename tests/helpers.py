@@ -43,6 +43,7 @@ allow_provider_fallback = false
 
 [execution]
 enabled = {str(enabled).lower()}
+provider = "codex"
 codex_binary = "{codex_binary}"
 max_tasks = {max_tasks}
 task_timeout_seconds = 20

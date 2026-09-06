@@ -19,8 +19,8 @@ Exit gate: all automated tests, historical replay, forward test, fresh-process r
 
 ## Earlier v0.2 scope · Safe pilot
 
-- First explicit non-sensitive pilot: **done 2026-08-24**. One real Codex task ran end to end, its artifact was promoted, every receipt was reviewed, and the source roots stayed byte-identical. `PROMOTION_GATE` stands at 1/3.
-- Two further real runs with evidence and no boundary violations.
+- First explicit non-sensitive pilot: **recorded 2026-08-24**. One real Codex task ran end to end, its artifact was promoted, every receipt was reviewed, and the source roots stayed byte-identical. This was the historical 1/3 stage; subsequent coverage and the current gate are in STATUS and the dated VALIDATION ledger.
+- Remaining coverage evidence: the later 2026-08-25 decision accepted a bounded coverage test instead of two identical runs; consult that decision before adding more pilots.
 - Stronger OS-level read confinement or a reduced-context worker architecture.
 - Improved redaction, resumption, and quota-status adapters that use documented interfaces only.
 

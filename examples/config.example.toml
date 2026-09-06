@@ -1,7 +1,10 @@
 [run]
 # The OUTER reset (usually weekly), from the official usage UI. The run rides the
 # inner ~5h windows on its own: a closed window pauses the run, only this stops it.
-reset_at = "2099-01-01T03:00:00+08:00"
+reset_at = "REPLACE_WITH_CONFIRMED_ISO_TIMESTAMP"
+# Start within 24 hours of reset. The earlier of this ceiling and reset minus
+# the safety buffer is frozen in the plan; reloading never extends that deadline.
+max_runtime_hours = 12
 safety_buffer_minutes = 15
 drain_window_minutes = 30
 mode = "safe"
@@ -24,9 +27,9 @@ report_language = "auto"
 
 [billing]
 # These are user assertions, not automated account verification.
-subscription_auth_only = true
-user_asserts_credit_balance_zero = true
-user_asserts_auto_top_up_off = true
+subscription_auth_only = false
+user_asserts_credit_balance_zero = false
+user_asserts_auto_top_up_off = false
 allow_api_key = false
 allow_paid_credits = false
 allow_provider_fallback = false
@@ -34,12 +37,14 @@ allow_provider_fallback = false
 [execution]
 # Plan-only is the default. Enabling this still requires CLI --execute.
 enabled = false
+# Choose explicitly before planning: "codex" or "claude" (safe mode only).
+provider = "CHOOSE_PROVIDER"
+claude_binary = "claude"
 codex_binary = "codex"
 max_tasks = 3
 # Absolute per-run cap on worker launches: first attempts, quota retries, and
-# re-planned rounds all count. A runaway backstop — the tool cannot see the
-# provider's quota pool, so this is the one spend bound it can enforce itself.
-max_worker_calls_per_run = 500
+# re-planned rounds all count. This caps launches, not charges or token usage.
+max_worker_calls_per_run = 20
 task_timeout_seconds = 900
 sigint_grace_seconds = 20
 sigterm_grace_seconds = 10

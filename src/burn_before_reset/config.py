@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import os
 import re
 import subprocess
 import tomllib
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -19,8 +21,8 @@ class ConfigError(ValueError):
 
 # Flags the Claude worker command depends on for its read-only guarantee.
 # `--safe-mode` is load-bearing (without it a probe reached a connected
-# cloud-storage write tool) but absent from the documented CLI reference, so it
-# cannot be treated as a stable contract: the preflight probes `claude --help`
+# cloud-storage write tool). It is documented as of 2026-09-06; installed CLI
+# capabilities still vary, so the preflight probes `claude --help`
 # and refuses to run against a CLI that does not advertise every one of these.
 # Dropping `--safe-mode` and relying on `--tools` alone is not an acceptable
 # fallback — that reopens the MCP write-tool hole the flag exists to close.
@@ -47,6 +49,7 @@ class RunSettings:
     replan_when_queue_empty: bool
     output_language: str
     report_language: str
+    max_runtime_hours: float = 12.0
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,7 @@ class ExecutionSettings:
     task_timeout_seconds: int
     sigint_grace_seconds: float
     sigterm_grace_seconds: float
+    provider_explicit: bool = False
 
 
 @dataclass(frozen=True)
@@ -219,6 +223,12 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
     current = now or datetime.now(tz=reset_at.tzinfo)
     if current.tzinfo is None:
         current = current.replace(tzinfo=reset_at.tzinfo)
+    if reset_at - current > timedelta(hours=24):
+        raise ConfigError("reset must be within 24 hours; re-plan nearer the reset")
+    max_runtime = _finite_number(
+        run_data.get("max_runtime_hours", 12), "run.max_runtime_hours", minimum=2, maximum=24,
+    )
+    hard_stop_at = min(hard_stop_at, current + timedelta(hours=max_runtime))
     if hard_stop_at <= current:
         raise ConfigError("hard stop is not in the future")
     if hard_stop_at - current < timedelta(minutes=20):
@@ -251,6 +261,7 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
     execution = ExecutionSettings(
         enabled=_require_bool(execution_data, "enabled"),
         provider=provider,
+        provider_explicit="provider" in execution_data,
         codex_binary=str(execution_data.get("codex_binary", "codex")),
         claude_binary=str(execution_data.get("claude_binary", "claude")),
         max_tasks=int(
@@ -358,6 +369,7 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
             replan_when_queue_empty=replan_when_queue_empty,
             output_language=output_language,
             report_language=report_language,
+            max_runtime_hours=max_runtime,
         ),
         billing=billing,
         execution=execution,
@@ -375,6 +387,8 @@ def assert_execution_environment(
     environment = os.environ if env is None else env
     if not config.execution.enabled:
         raise ConfigError("execution.enabled is false")
+    if not config.execution.provider_explicit:
+        raise ConfigError("execution.provider must be explicit before execution")
     current = now or datetime.now(tz=config.run.reset_at.tzinfo)
     if current.tzinfo is None:
         current = current.replace(tzinfo=config.run.reset_at.tzinfo)
@@ -433,3 +447,17 @@ def assert_claude_cli_contract(binary: str) -> None:
             "the Claude worker's read-only guarantee depends on these flags, "
             "so the run is refused rather than launched without them"
         )
+
+
+def config_fingerprint(config: AppConfig) -> str:
+    """Bind a reviewed plan to its sources, provider, policy and execution limits.
+
+    Enabling execution after review is allowed; reloading a time-relative ceiling
+    cannot extend the deadline stored in the plan.
+    """
+    payload = asdict(config)
+    payload["run"].pop("hard_stop_at")
+    payload["execution"].pop("enabled")
+    payload["execution"].pop("provider_explicit")
+    encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()

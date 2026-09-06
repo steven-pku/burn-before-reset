@@ -82,7 +82,22 @@ def _is_claude_session(text: str) -> bool:
 def _signals_and_snippets(text: str, root: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
     found: set[str] = set()
     snippets: list[str] = []
+    fence_char = ""
+    fence_length = 0
     for line in text.splitlines():
+        stripped = line.lstrip()
+        fence = re.match(r"(`{3,}|~{3,})", stripped)
+        if fence:
+            marker = fence.group(1)
+            if not fence_char:
+                fence_char, fence_length = marker[0], len(marker)
+            elif marker[0] == fence_char and len(marker) >= fence_length:
+                fence_char = ""
+            continue
+        if fence_char or stripped.startswith(">"):
+            continue
+        if re.match(r"(?:[-*+]|\d+[.)])\s+\[[xX-]\]", stripped):
+            continue
         line_signals = [name for name, pattern in SIGNALS if pattern.search(line)]
         if not line_signals:
             continue

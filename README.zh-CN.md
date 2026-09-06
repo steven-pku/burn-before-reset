@@ -1,46 +1,73 @@
 # Burn Before Reset 🔥
 
-[English](./README.md) · 中文
-
-> 本页是中文说明页（不是逐句对译）：讲清是什么、怎么跑、边界在哪。完整文档、安全模型细节与最新状态以英文 [README](./README.md) 为准。
+[English](README.md) · 中文
 
 **别烧 token，烧掉你的积压。**
 
-订阅额度每周重置，没用完就作废。Burn Before Reset 把这些即将过期的额度，变成**可复核的真实成果**：agent 自己从你允许的来源（会话日志 / 代码仓库 / 文档目录）里找活干，骑着内层额度窗口（用完就睡、补充了再干），只在你给定的外层重置时间前**机械硬停**。醒来收一份 Morning Report。
+把即将重置的 Codex 或 Claude Code 订阅额度，转成可审阅的本地产物：决策分析、主张核验报告、堵点分析和补丁计划。工具从你指定的来源中找候选任务，按有界队列执行，并在确认的重置时间或独立运行上限之前停止。
 
-Token 消耗是约束，不是 KPI——每个任务都追溯到真实来源里的真实信号，绝不为烧而烧。
+**当前是公开候选版本。先体验不调用模型的演示。**真实执行主要在一台机器上验证，尚未证明可无人值守用于敏感资料。完整边界以英文 [README](README.md) 和 [SECURITY.md](SECURITY.md) 为准。
 
-## 现状（诚实声明）
+<img alt="示例成果页：一份决策分析、一份主张核验报告。数据为虚构，未调用模型。" src="assets/report.jpg" width="900" />
 
-**公开候选（candidate）。尚未证明可无人值守用于敏感数据。**默认路径是 plan-only（只出计划不执行）；`--execute` 请先在自己的源上盯着跑过再谈信任。完整闸门台账见 [VALIDATION.md](VALIDATION.md)。
+截图使用示例数据，不代表真实运行或成果价值。成果页支持中文；加入交办清单只做本地选择，复制给 agent 后才由你继续交办。
 
-## 快速上手
+## 一条命令体验
 
-需要 Python 3.11+、Git，以及本地已登录的 Codex CLI 或 Claude Code CLI。
+需要 macOS 或 Linux、Python 3.11+ 和 Git。演示不需要模型 CLI、账号登录或额度。
+
+```bash
+git clone https://github.com/steven-pku/burn-before-reset.git
+cd burn-before-reset
+python3 scripts/demo.py
+```
+
+看到 `DEMO READY — no model, login or quota used` 后，打开输出路径里的 `REPORT.zh.html`。演示会另外生成一份经过校验的真实计划，确认示例源文件没有变化、执行开关仍关闭。演示中的计费断言是虚构的，不应拿来运行真实任务。
+
+## 运行自己的任务
+
+需要本地已登录的 Codex CLI 或 Claude Code。以下命令在仓库根目录执行。
+
+1. 复制配置模板，填写从官方用量页面确认的重置时间及其时区；只允许在重置前 24 小时内启动。
+2. 显式选择 `execution.provider` 为 `codex` 或 `claude`，填写允许读取的来源，输出目录应持久保存且与来源分离。
+3. 确认订阅登录、Credits 余额为零、自动充值关闭后，才把对应断言改为 `true`。工具不会自动核验账号余额。
+4. 保持 `execution.enabled = false`，先生成计划；首次实跑保留较小任务数与调用上限。
 
 ```bash
 cp examples/config.example.toml config.local.toml
-# 先编辑 config.local.toml：把占位路径换成你真实的来源目录，
-# output_root 指向一个持久位置
+# 先编辑上述字段；未改动的模板会拒绝运行。
 python3 scripts/bbr.py validate-config --config config.local.toml
 python3 scripts/bbr.py plan --config config.local.toml
 ```
 
-`validate-config` 对占位路径会以 exit `2` 拒绝——那是闸门在工作，不是 bug。执行（`run --execute`）是双重门控的，细节见英文 README 的 Quick start 与 Safety model。
+审阅输出目录里的 `RUN_PLAN.md`、`CANDIDATES.jsonl` 和 `QUEUE.json`。此时没有调用模型，也没有已完成产物。然后把 `execution.enabled` 改为 `true`，选择一种模式：
 
-## 安全要点（速览）
+```bash
+# 只执行刚刚审阅的队列；替换成实际输出路径。
+python3 scripts/bbr.py run --config config.local.toml --run-dir /path/to/reviewed-run --execute
 
-- 你提供带时区的绝对重置时间；默认在重置前 15 分钟硬停，低于 10 分钟直接拒绝。
-- 计费 fail-closed：Credits 余额未知、Auto top-up 状态未知、环境里有 API key、或出现计费 / 限流错误，一律停。
-- 只读索引显式允许的来源；绝不改动源目录，绝不 push / 删除 / 对外发送 / 花钱。
-- 队列冻结后不再追加；找不到真活就诚实结束，不编造任务。
+# 或明确授权自动规划及后续轮次。
+python3 scripts/bbr.py run --config config.local.toml --autopilot --execute
+```
 
-## 不做什么
+审阅模式不会追加新任务；改变供应商、来源、重置时间或运行限制后，需要重新生成计划。旧版本没有配置绑定信息的计划也需重建。执行结束后查看 `REPORT.html`、`MORNING_REPORT.md` 和 `STOP_REASON`。
 
-- 不从未公开接口抓取额度 / 重置数据；不保证服务端计费行为。
-- 不用 API key、付费 Credits、供应商 fallback 或云端任务。
-- 不改你的笔记库和代码仓库；不开 PR、不建远端、不 push。
+## 关键边界
 
-## 许可
+- 默认最长运行 12 小时，最多可配置 24 小时；取该上限与“重置前安全缓冲”两者中更早的时间，规划时冻结，重新加载不会延长。
+- 默认重置前 15 分钟硬停，安全缓冲不能低于 10 分钟；距有效硬停不足 60 分钟时拒绝新执行。
+- 每次模型启动及额度重试都计入调用上限。临时限流可在时限内等待，认证或计费异常会停止；文本判断不能保证区分所有限流原因。
+- 索引器只读指定来源。模型工具的读取范围更宽，详见 [安全边界](SECURITY.md)，不要把敏感资料放进实跑环境。
+- 不使用 API key、付费 Credits、供应商切换或云端任务；不把推送、合并、发布、消息或购买作为工作流动作。服务端计费仍取决于账号设置，工具不能保证零扣费。
+
+## 已有证据
+
+**v0.3.2** 带来了显式执行模式和无需调用模型的首次体验，详见 [Release](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.2)。一次真实通宵、三次运行，完成了 **25 个任务，形成 27 份产物**；CLI 回报的用量估算为 **$71.38**，随后供应商拒绝继续工作。这不证明余额归零，也不代表实际扣费、节省金额或成果价值。27 份产物的人工有用性评价仍待完成。
+
+测试覆盖和模拟演示不等于跨账号、跨环境的无人值守可靠性证明。详见 [验证台账](VALIDATION.md) 和 [变更记录](CHANGELOG.md)。
+
+## 反馈与贡献
+
+普通问题通过 [Issues](https://github.com/steven-pku/burn-before-reset/issues) 提交；越界执行、意外计费等安全问题走 [私密漏洞报告](https://github.com/steven-pku/burn-before-reset/security/advisories/new)，请勿公开凭证、私人路径或会话记录。贡献检查见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 MIT — 见 [LICENSE](LICENSE)。

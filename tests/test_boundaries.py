@@ -535,8 +535,8 @@ class ClaudeWorkerTests(unittest.TestCase):
         (source / "work.md").write_text("# Work\n\nTODO: verify this.\n", encoding="utf-8")
         path = write_config(root / "config.toml", source, root / "output", enabled=True)
         text = path.read_text(encoding="utf-8").replace(
-            '[execution]\nenabled = true',
-            f'[execution]\nenabled = true\nprovider = "claude"\nclaude_binary = "{HERMETIC_BINARY}"'
+            'provider = "codex"',
+            f'provider = "claude"\nclaude_binary = "{HERMETIC_BINARY}"'
         )
         path.write_text(text, encoding="utf-8")
         return load_config(path), source
@@ -581,7 +581,7 @@ class ClaudeWorkerTests(unittest.TestCase):
             (source / "work.md").write_text("# Work\n\nTODO: verify.\n", encoding="utf-8")
             path = write_config(root / "config.toml", source, root / "output", enabled=True, mode="balanced")
             text = path.read_text(encoding="utf-8").replace(
-                '[execution]\nenabled = true', '[execution]\nenabled = true\nprovider = "claude"'
+                'provider = "codex"', 'provider = "claude"'
             )
             path.write_text(text, encoding="utf-8")
             with self.assertRaises(ConfigError):
@@ -867,7 +867,7 @@ class SupervisorSurvivalTests(unittest.TestCase):
             )
             repo = Path(__file__).resolve().parents[1]
             supervisor = subprocess.Popen(
-                [sys.executable, str(repo / "scripts" / "bbr.py"), "run", "--config", str(config_path), "--execute"],
+                [sys.executable, str(repo / "scripts" / "bbr.py"), "run", "--config", str(config_path), "--autopilot", "--execute"],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,

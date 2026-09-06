@@ -20,7 +20,8 @@ def write_morning_report(run_dir: Path, state: dict[str, Any], queue: dict[str, 
         f"- Planning rounds: {len(state.get('rounds', [])) or 1}",
         f"- Quota replenishment waits: {int(state.get('quota_wait_cycles', 0))}",
         "",
-        "## Burn",
+        "## Reported usage",
+        "CLI-reported cost estimates are not bills, savings, remaining quota or artifact value.",
         "",
     ]
     pace = state.get("burn_pace") or {}
@@ -29,7 +30,7 @@ def write_morning_report(run_dir: Path, state: dict[str, Any], queue: dict[str, 
     if calls:
         priced = int(burn.get("cost_known_calls", 0))
         spent = pace.get("spent_usd", 0.0)
-        spent_line = f"- Spent: ${spent:.4f}" if priced else "- Spent: not priced by this provider (tokens only)"
+        spent_line = f"- Estimated usage cost: ${spent:.4f}" if priced else "- Estimated usage cost: not priced by this provider (tokens only)"
         if priced and priced < calls:
             spent_line += f" — priced on {priced} of {calls} calls"
         lines.append(spent_line)

@@ -4,8 +4,8 @@
 
 ## How it was verified
 
-- [ ] `python3 -m unittest discover` passes
-- [ ] `uvx ruff check .` passes
+- [ ] `python3 scripts/check.py` passes
+- [ ] `uvx ruff==0.16.5 check .` passes
 - [ ] For a fix: the new test was run against the previous tree and went red (say how)
 - [ ] Schemas updated in the same commit if any emitted field changed
 - [ ] `VALIDATION.md` entry added for anything that changes a safety claim or a report
