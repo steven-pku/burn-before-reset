@@ -1,43 +1,10 @@
 # Burn Before Reset · Project Guidance
 
-## Scope
+Read the workspace-level `AGENTS.md` (the parent `Codex/AGENTS.md`) if not loaded, then `PROJECT.md`, current `STATUS.md`, relevant confirmed `DECISIONS.md` entries and `SECURITY.md` before execution-related work.
 
-These rules apply only to `burn-before-reset`.
-
-## Required startup
-
-Before substantial work:
-
-1. Read `PROJECT.md` and `STATUS.md` completely.
-2. Read the most recent relevant entries in `DECISIONS.md`; search older entries by task keyword.
-3. Read `ROADMAP.md` only when the task changes milestones, phases, or scope.
-4. Read `HANDOFF.md` only when it exists with `status: open`.
-5. Load research, references, and large artifacts just in time instead of preloading them.
-
-## Sources of truth
-
-- `PROJECT.md`: stable mission, scope, success criteria, and safety boundary.
-- `STATUS.md`: current stage, health, blockers, verification, and one next action.
-- `DECISIONS.md`: approved decisions and rationale; do not record unconfirmed ideas.
-- `README.md`: human-facing overview; do not use it as the live status ledger.
-
-## Work rules
-
-- Preserve unrelated user changes and inspect the working tree before edits.
-- Do not fabricate evidence, paths, completion, or validation results.
-- Ask before destructive, external-facing, production, credential, billing, or paid actions.
-- Keep changes narrow and follow existing project patterns.
-
-## Validation
-
-- Run the narrowest relevant automated check after edits.
-- Record the exact check and result in `STATUS.md` when the task materially changes the project.
-- Report skipped checks and remaining risk explicitly.
-
-## Closeout
-
-- Update `STATUS.md` after substantial project work; do not add subjective progress percentages.
-- Append `DECISIONS.md` only for a decision Steven confirmed or an approved evidence-driven reversal.
-- Update `ROADMAP.md` only when the plan changed and `README.md` only when human-facing behavior changed.
-- Create `HANDOFF.md` only for a real pause, blocker, context transfer, or agent switch.
-- Do not edit this `AGENTS.md` unless Steven approves a durable project-rule change.
+- Maintain the repository-scoped Skill and standard-library runner. A public candidate release, machine tests, real pilot coverage, a `verified` claim and global installation are distinct gates; use the latest confirmed decision and dated VALIDATION entries.
+- Runner sources remain read-only; outputs are confined to the approved run directory. Deadline, billing assertion, provider, process-group stop and source-boundary checks fail closed. No paid fallback, external mutation or release is implied by autopilot selection.
+- In an authorized autopilot run, preserve the one up-front mode decision and bounded continuation across inner allowance windows. Do not introduce mid-flow approval waits for already-authorized local work; the outer deadline and safety boundaries still apply.
+- Claude worker confinement depends on the actual `--tools` allowlist, `--restricted`, `--safe-mode` and strict empty MCP configuration plus capability preflight. Old logs describing `--safe-mode` alone as removing built-in tools are superseded by the A21 repair; do not weaken current guards from old prose.
+- Use hermetic unit/integration and negative regression tests for changed guards. Real worker calls, overnight runs, external reviews, publishing and installation require their own applicable authorization; routine governance does not rerun them.
+- Preserve dated validation entries. Cross-agent ownership and business action ordering must come from confirmed project state, not from a registry-validator workaround.
