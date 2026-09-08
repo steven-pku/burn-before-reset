@@ -1,3 +1,5 @@
+<img alt="Burn Before Reset：把即将重置的额度转成可审阅成果" src="assets/banner.jpg" width="100%" />
+
 # Burn Before Reset 🔥
 
 [English](README.md) · 中文

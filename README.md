@@ -1,3 +1,5 @@
+<img alt="Burn Before Reset: expiring quota becomes reviewable work" src="assets/banner.jpg" width="100%" />
+
 # Burn Before Reset 🔥
 
 [![tests](https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml/badge.svg)](https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml)
