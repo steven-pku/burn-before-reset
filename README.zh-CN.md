@@ -1,14 +1,34 @@
-<img alt="Burn Before Reset：把即将重置的额度转成可审阅成果" src="assets/banner.jpg" width="100%" />
+<p align="center">
+  <img alt="Burn Before Reset：把即将重置的额度转成可审阅成果" src="assets/banner.jpg" width="100%" />
+</p>
 
-# Burn Before Reset 🔥
+<h1 align="center">Burn Before Reset 🔥</h1>
 
-[English](README.md) · 中文
+<p align="center">
+  <a href="https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml"><img alt="测试状态" src="https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml/badge.svg" /></a>
+  <a href="LICENSE"><img alt="MIT 许可" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" /></a>
+  <a href="pyproject.toml"><img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square" /></a>
+</p>
 
-**别烧 token，烧掉你的积压。**
+<p align="center"><strong>别烧 token，烧掉你的积压。</strong></p>
+
+<p align="center"><a href="README.md">English</a> · 中文</p>
+
+<p align="center">
+  <a href="#一条命令体验">快速体验</a> ·
+  <a href="#运行自己的任务">真实执行</a> ·
+  <a href="#关键边界">安全边界</a> ·
+  <a href="#已有证据">验证证据</a> ·
+  <a href="#反馈与贡献">反馈与贡献</a>
+</p>
+
+<hr />
 
 把即将重置的 Codex 或 Claude Code 订阅额度，转成可审阅的本地产物：决策分析、主张核验报告、堵点分析和补丁计划。工具从你指定的来源中找候选任务，按有界队列执行，并在确认的重置时间或独立运行上限之前停止。
 
 **当前是公开候选版本。先体验不调用模型的演示。**真实执行主要在一台机器上验证，尚未证明可无人值守用于敏感资料。完整边界以英文 [README](README.md) 和 [SECURITY.md](SECURITY.md) 为准。
+
+## 你会得到什么
 
 <img alt="示例成果页：一份决策分析、一份主张核验报告。数据为虚构，未调用模型。" src="assets/report.jpg" width="900" />
 

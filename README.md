@@ -1,24 +1,39 @@
-<img alt="Burn Before Reset: expiring quota becomes reviewable work" src="assets/banner.jpg" width="100%" />
+<p align="center">
+  <img alt="Burn Before Reset: expiring quota becomes reviewable work" src="assets/banner.jpg" width="100%" />
+</p>
 
-# Burn Before Reset 🔥
+<h1 align="center">Burn Before Reset 🔥</h1>
 
-[![tests](https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml/badge.svg)](https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml)
-[![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square)](pyproject.toml)
+<p align="center">
+  <a href="https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/steven-pku/burn-before-reset/actions/workflows/tests.yml/badge.svg" /></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" /></a>
+  <a href="pyproject.toml"><img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square" /></a>
+</p>
 
-English · [中文](README.zh-CN.md)
+<p align="center"><strong>Don’t burn tokens. Burn down your backlog.</strong></p>
 
-**Don’t burn tokens. Burn down your backlog.**
+<p align="center">English · <a href="README.zh-CN.md">中文</a></p>
+
+<p align="center">
+  <a href="#try-it-without-a-model">Try it</a> ·
+  <a href="#run-real-work">Run real work</a> ·
+  <a href="#safety-model">Safety</a> ·
+  <a href="#current-status">Evidence</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a> ·
+  <a href="SECURITY.md">Security</a>
+</p>
+
+<hr />
 
 Turn expiring Codex or Claude Code subscription quota into local work you can review: decision briefs, claim reviews, blocker analyses and patch plans. Burn Before Reset finds candidates in sources you select, runs a bounded queue, and stops before your confirmed reset time or an independent runtime ceiling.
 
 **Public candidate. Start with the no-model demo below.** Execution has been exercised on one machine; it is not proven safe for unattended use with sensitive data. [Evidence and remaining limits](VALIDATION.md).
 
+## What you get
+
 <img alt="Illustrative report with one decision brief and one claim review. Sample data; no model calls." src="assets/report.jpg" width="900" />
 
 *Sample data, not a real run or a value claim.* The self-contained report groups artifacts, links to their source, and lets you prepare a handoff brief. Adding an item to the list sends nothing; copy the brief to your agent when you want to continue.
-
-[Try it](#try-it-without-a-model) · [Run real work](#run-real-work) · [Safety](#safety-model) · [Evidence](#current-status) · [Contribute](CONTRIBUTING.md) · [Security reports](SECURITY.md)
 
 ## Try it without a model
 
