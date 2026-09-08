@@ -97,7 +97,7 @@ Real Codex tasks and a live deadline stop have also been observed; `balanced` mo
 | Code | Meaning |
 |---|---|
 | `0` | Queue exhausted with no failed task. Review artifact quality separately. |
-| `1` | Incomplete or failed run. Read `STOP_REASON`; deadline, drain and allowance stops can be expected outcomes. |
+| `1` | Incomplete or failed run, or a completed queue that carries a failed task. Read `STOP_REASON`; deadline, drain and allowance stops can be expected outcomes. |
 | `2` | Command refused or errored: configuration, execution mode, preflight or command failure. Read stderr; inspect any existing run receipts. |
 
 ## Agent support and repository layout

@@ -5,7 +5,7 @@
 - Roots must be absolute, exist, resolve inside the configured allowlist, and not be symlinks escaping it.
 - Index metadata first. Read at most the configured byte cap per text file.
 - Never copy full transcripts into reports. Record source type, stable local reference, timestamp, title, signal count, and short redacted snippets.
-- Skip secret-like basenames and configured excluded path fragments before opening a file.
+- Skip secret-like basenames and configured excluded path fragments before opening a file. A fragment is a case-insensitive substring of the root-relative path; a `/` at either end anchors it to a whole segment. Files under `run.output_root`, and session transcripts written from a working directory inside it, are never indexed.
 
 ## Codex sessions
 

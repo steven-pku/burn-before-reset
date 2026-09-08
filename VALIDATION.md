@@ -1055,3 +1055,36 @@ check now rejects.
 - Not done, deliberately: no new real model run, no release, no tag, and no promotion. `AGENTS.md`,
   `STATUS.md` and `archive/` were left untouched in the working tree on instruction — including the
   `STATUS.md` update this project's own closeout rules would otherwise require.
+
+## 2026-09-08 · Retrospective of the overnight run: merge and Skill guidance
+
+Source: the same night as the entry above, read back from the operator's own notes, the wrap-up
+page and the decision cards. This entry covers the merge of the repair branch into `main` and the
+Skill-level changes the retrospective produced. It claims no new real model run, no release and no
+human grading.
+
+- The repair branch (`claude/distracted-bartik-6f39a6`, based on `d450e82`) was committed and
+  cherry-picked onto `main` as one commit. `DECISIONS.md` conflicted at the end of the file; both
+  same-day entries were kept in order (D1–D3 first, then the entry extending D2). Two references to
+  a commit hash that no longer exists after a squash were corrected to `7ac6cfe`. A username, one
+  project directory name and three project-category names in the repair entry were rewritten to the
+  wording already on `main` ("a single one of the operator's own project directories", "several
+  sensitive project categories"); the replay table now labels those rows by kind rather than name.
+- On merged `main`: 184 hermetic tests pass; pinned ruff 0.16.5 passes; the no-model demo creates
+  and validates a real plan, leaves the source unchanged and refuses execution; `git diff --check`
+  passes.
+- Skill changes, each from a failure the operator actually committed that night rather than from a
+  hypothetical: step 9 no longer calls a timeout a run failure and points at the failed-task causes
+  in the Morning Report; a **Morning delivery** section makes `REPORT.html` the first thing handed
+  over, one per run, ahead of any narrative (the operator that morning delivered a narrative page and
+  had to be asked for the report); counts are given as files or tasks, never conflated (the "46"
+  correction); a merged view lives outside `output_root`; step 8 names the recovery for a fault stop
+  with window left and forbids editing a frozen configuration; a rule states that an exclusion is
+  reported from `validate-config` counts, never from intent (the launch-time "hard exclusion" claim
+  that turned out false on session sources); the receipts section names the two new `RUN_PLAN.md`
+  sections and `consecutive_failure_limit`.
+- `README.md` exit-code row 1 and `references/source-adapters.md` now describe the new matching and
+  the self-output guard; `CHANGELOG.md` Unreleased records the Skill change.
+- Not done, deliberately: no cross-run merged report feature (recorded as a gap in STATUS); the
+  operator's local `AGENTS.md` rewrite and `archive/` were left uncommitted; `STATUS.md` was updated
+  on top of the operator's own uncommitted correction line, which is included in the commit.

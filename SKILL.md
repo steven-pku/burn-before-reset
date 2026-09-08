@@ -72,8 +72,14 @@ Continuation is on by default (`wait_for_replenish = true`).
 5. Read back `RUN_PLAN.md`, `QUEUE.json`, and `RUN_STATE.json`. Confirm the queue is frozen, every item is traceable to a source, and every item has a deliverable, a validation rule, and a write boundary.
 6. Run from the repository root. For the reviewed queue use `python3 scripts/bbr.py run --config <config.toml> --run-dir <reviewed-run-dir> --execute`; this never re-plans. Use `python3 scripts/bbr.py run --config <config.toml> --autopilot --execute` only when the mode allows it: in autopilot, the up-front 看着办 answer **is** the standing authorization and execution follows planning immediately; in review mode, wait for the user to say "execute". Either way the config must set `execution.enabled = true`.
 7. The runner starts the external deadline guard before the Worker and supervises both. A lost guard, a descendant that needs cleanup, or an unconfirmed stop is a failure. Never rely on the model to stop itself.
-8. In explicitly authorized autopilot only, when a queue drains with usable time left, the runner re-plans from fresh signals (`replan_when_queue_empty`); a round that finds nothing new ends the run. Filler tasks are never invented — every task traces to a real signal. Work an earlier run in the same `output_root` finished is skipped unless its source moved, and named in `RUN_PLAN.md` — a restart after a crash resumes rather than redoes.
-9. Read back `MORNING_REPORT.md` and `STOP_REASON`. No read-back, a failed validation, a timeout, or an empty result means the run is not a success. `REPORT.html` is the user's copy of the same night — hand them the path; never paraphrase it.
+8. In explicitly authorized autopilot only, when a queue drains with usable time left, the runner re-plans from fresh signals (`replan_when_queue_empty`); a round that finds nothing new ends the run. Filler tasks are never invented — every task traces to a real signal. Work an earlier run in the same `output_root` finished is skipped unless its source moved, and named in `RUN_PLAN.md` — a restart after a crash resumes rather than redoes. With usable window left, two kinds of stop are recovered the same way — launch another run into the same `output_root` under the same authorization: a crash before any `STOP_REASON` was written, and `consecutive_failure_limit` once the Morning Report shows no billing, auth or permission signal among the failed tasks' causes. A billing, auth, sandbox, permission, source-mutation or guard stop is never relaunched unattended. Never edit a frozen configuration (`config_sha256` is bound into the run) — write a new file.
+9. Read back `MORNING_REPORT.md` and `STOP_REASON`. No read-back, a failed validation, an empty result, a safety stop (billing or auth, source mutation, deadline guard, guard failure, descendant cleanup), or `consecutive_failure_limit` means the run is not a success. A completed queue may carry failed tasks (exit code 1); the Morning Report names each with its cause — read them before trusting the rest. Then deliver as described under **Morning delivery**.
+
+## Morning delivery
+
+- `REPORT.html` is the deliverable. Hand the user its path first, one per run — a night relaunched after a stop has two. Never paraphrase it and never bury it under an account of the night; a process narrative is optional and comes second.
+- Give counts from the receipts and name the unit (files or tasks): artifact files are not distinct tasks. A source that moved between runs is legitimately redone, so two files can answer one task.
+- The tool has no merged view across runs. Any derived view you assemble must live outside `output_root`; inside it, `prior_completions` and the latest-run lookup treat it as a sibling run, and later nights skip real work.
 
 ## Non-negotiable rules
 
@@ -84,6 +90,7 @@ Continuation is on by default (`wait_for_replenish = true`).
 - Code changes live in staging or a separate worktree. This version does not integrate anything back.
 - Stop on any billing, auth, sandbox, or permission uncertainty. Never retry by switching billing paths. A closed allowance window is the one exception: it is a pause, not an uncertainty — the supervisor waits and retries inside the outer hard stop (`wait_for_replenish`).
 - Report `verified`, `released`, a real successful run, and a public release as four separate claims.
+- Never tell the user a path or project is excluded on intent. `validate-config` counts what each `exclude_fragments` entry catches under each root; an entry that counts zero on a root it is meant to guard is not an exclusion there — `validate-config` prints it as a warning, and that warning is what you report.
 
 ## Reading the receipts
 
@@ -91,11 +98,13 @@ Continuation is on by default (`wait_for_replenish = true`).
   while a Worker ran. Movement alone does not stop the run — session logs and live
   project trees move on their own. Only a Worker that *could* write (Codex
   `balanced`) is blamed; the line above the list says which happened.
+- `RUN_PLAN.md` carries **Exclusions in effect** (what each entry caught, per root) and **Excluded as this tool's own output** (the run's own transcripts and artifacts dropped before scoring). A missing or empty second list after a re-planning round deserves a second look.
 - **Errors reported by the Worker** lists error events that arrived even on a zero-exit run. Read them before trusting any artifact.
 - `workers/<task>/DROPPED_ENV.txt`, when present, lists environment variables withheld from the Worker because they could redirect the endpoint or supply a key.
 - `STOP_REASON` distinguishes `quota_exhausted` — the allowance ran out and waiting
   was disabled or cut short — from `billing_or_auth_error`, which is a fault. Do not
-  report the first as a failure.
+  report the first as a failure. `consecutive_failure_limit` means failures in a row reached
+  `execution.max_consecutive_failures`; a single failed task never ends the run on its own.
 - **Planning rounds** and **quota replenishment waits** in the Morning Report show how
   the night was actually spent: rounds > 1 means the queue drained and was refilled
   from fresh signals; waits > 0 means the run rode at least one closed window.

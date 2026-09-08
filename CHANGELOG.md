@@ -28,6 +28,7 @@ record of what has actually been proven.
 - `validate-run` no longer treats `queue_exhausted` beside a non-empty failed list as a contradiction — under the new behaviour a completed queue may legitimately carry failed tasks. It now rejects the case that really is impossible: a run-ending failure recorded inside a run that reports its queue as exhausted.
 - Adding `execution.max_consecutive_failures` changes `config_sha256`. A plan frozen before this release refuses to execute against a configuration reloaded after it; re-plan rather than editing the frozen run.
 - A blank `exclude_fragments` entry is refused at configuration load. Under substring matching it is contained in every path and would silently empty a source root.
+- Skill guidance, after the operator's own conduct on the same night: a new **Morning delivery** section (hand over `REPORT.html` first, one per run; count files and tasks separately; keep any merged view outside `output_root`), step 9 aligned with the new stop behaviour, a recovery path for a fault stop with window left, and a rule that an exclusion is reported from `validate-config` counts, never from intent.
 
 ## [0.3.2] — 2026-09-07
 
