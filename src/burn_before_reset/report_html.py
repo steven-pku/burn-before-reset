@@ -58,6 +58,7 @@ STOP_TONE = {
     "worker_call_cap": "warn",
     "worker_reported_error": "warn",
     "task_timeout": "warn",
+    "consecutive_failure_limit": "warn",
 }
 DEFAULT_TONE = "bad"
 
@@ -70,6 +71,7 @@ STOP_WORD = {
     "worker_call_cap": ("中途叫停", "Called off"),
     "task_timeout": ("中途叫停", "Called off"),
     "worker_reported_error": ("中途叫停", "Called off"),
+    "consecutive_failure_limit": ("接连失败", "Too many failures"),
 }
 STOP_WORD_DEFAULT = ("异常停机", "Fault stop")
 

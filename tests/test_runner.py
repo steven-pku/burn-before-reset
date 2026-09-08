@@ -92,14 +92,24 @@ class RunnerTests(unittest.TestCase):
             fake.write_text("#!/bin/sh\nprintf '%s\\n' '{\"type\":\"turn.completed\"}'\n", encoding="utf-8")
             fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
             config = load_config(
-                write_config(root / "config.toml", source, root / "output", enabled=True, codex_binary=str(fake))
+                write_config(
+                    root / "config.toml",
+                    source,
+                    root / "output",
+                    enabled=True,
+                    codex_binary=str(fake),
+                    max_consecutive_failures=1,
+                )
             )
             run_dir = plan_run(config)
             queue = read_json(run_dir / "QUEUE.json")
             deliverable = run_dir / queue["tasks"][0]["deliverables"][0]
             state = execute_run(config, run_dir, Path(__file__).resolve().parents[1] / "scripts" / "bbr.py")
             task_id = state["failed"][0]
-            self.assertEqual(state["stop_reason"], "invalid_worker_output")
+            # max_consecutive_failures = 1 is the opt-out that keeps the earlier
+            # behaviour: the first failure ends the run. The stop reason names the
+            # threshold; the task's own cause is in its result record, asserted next.
+            self.assertEqual(state["stop_reason"], "consecutive_failure_limit")
             self.assertEqual(state["task_results"][task_id]["error_type"], "NoFinalMessage")
             self.assertFalse(deliverable.exists())
 
@@ -344,10 +354,15 @@ class RunnerTests(unittest.TestCase):
             def result_contradicts_completed(s):
                 s["task_results"][task_id]["success"] = False
 
-            def exhausted_with_failures(s):
+            def exhausted_with_a_run_ending_failure(s):
+                # Since 2026-09-08 a completed queue may carry failed tasks. What cannot
+                # have happened is a *safety* failure inside one: those end dispatch
+                # where they occur, so `queue_exhausted` beside one is impossible.
                 s["completed"] = []
                 s["failed"] = [task_id]
                 s["task_status"][task_id] = "failed"
+                s["task_results"][task_id]["success"] = False
+                s["task_results"][task_id]["guard_failed"] = True
 
             def run_ends_before_it_starts(s):
                 s["finished_at"] = "2020-01-01T00:00:00+00:00"
@@ -363,7 +378,7 @@ class RunnerTests(unittest.TestCase):
             corrupt(invented_stop_reason, "unknown stop reason")
             corrupt(status_contradicts_completed, "disagree")
             corrupt(result_contradicts_completed, "no successful result record")
-            corrupt(exhausted_with_failures, "contradicts a non-empty failed list")
+            corrupt(exhausted_with_a_run_ending_failure, "contradicts a run-ending failure")
             corrupt(run_ends_before_it_starts, "finished before it was created")
             corrupt(stop_reason_before_stopped, "still at phase execute")
             corrupt(task_ends_before_it_starts, "finished before it started")

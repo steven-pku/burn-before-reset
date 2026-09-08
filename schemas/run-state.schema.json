@@ -75,6 +75,11 @@
         "type": "string"
       }
     },
+    "consecutive_failures": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Task failures in a row, reset by any success. Reaching execution.max_consecutive_failures stops the run; a single continuable failure below it books the task failed and dispatch moves to the next queued item."
+    },
     "stop_reason": {
       "type": [
         "string",
@@ -83,7 +88,7 @@
     },
     "source_mutation_detected": {
       "type": "boolean",
-      "description": "A source write was attributed to the Worker, which stops the run. Not the same as movement being observed \u2014 see source_movement_observed."
+      "description": "A source write was attributed to the Worker, which stops the run. Not the same as movement being observed — see source_movement_observed."
     },
     "source_movement_observed": {
       "type": "boolean",

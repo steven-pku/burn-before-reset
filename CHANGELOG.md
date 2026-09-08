@@ -10,7 +10,24 @@ record of what has actually been proven.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **`exclude_fragments` now matches fragments.** Entries were intersected against whole path components, so an entry only ever matched a complete directory or file name despite the option's name and documented examples. On a `claude_sessions` or `codex_sessions` source, where a whole project path is flattened into one directory segment, no entry could express "exclude this project" at all — the same config line behaved differently depending on source type, with nothing telling the user. Entries are now matched as a case-insensitive substring of the path relative to the source root. **This is a behaviour change: an existing configuration excludes more after upgrading, never less.** Writing a `/` at either end of an entry anchors it to a whole path segment, so an entry meant as a directory name keeps its old precision: `/.git/` excludes the `.git` directory at any depth and leaves `.github/` alone, where a bare `.git` now catches both. The shipped example configuration and `discover` proposals anchor their directory-name entries accordingly.
+- **One task failure no longer ends the whole run.** A run that had completed 43 tasks with zero failures was stopped by its 44th timing out, 79 minutes before the authorized hard stop. Reading the code corrected the diagnosis: it was not only timeouts — any non-quota failure returned a terminal stop reason. A task timeout, worker-reported error, invalid worker output, worker exception or plain failure is now booked against that task and dispatch continues to the next queued item. Safety failures are unchanged and still end the run where they occur: billing or authentication errors, attributable source mutation, the deadline guard, guard failure, an unconfirmed worker stop, an incomplete source check, and descendant cleanup. The continuation gate reads the raw result rather than the classified label, so a task that both timed out and failed its guard is still terminal, and a supervisor-side crash — whose synthesized result declares neither a confirmed worker stop nor a completed source check — stays terminal despite its label being in the continuable set.
+- **The planner no longer selects the run's own worker transcripts.** Workers are pinned to `<output_root>/<run>/staging/<task>`, and a session-recording CLI stores each worker's transcript in a directory named after that working directory. A re-planning round indexed those transcripts as fresh candidates and queued work against the run's own exhaust. Anything under `run.output_root` — by location, by the flattened working-directory name, or by the working directory a transcript declares — is now dropped before scoring, for every run sharing the output root and without depending on an operator-supplied exclusion. Drops are named in `RUN_PLAN.md`.
+
+### Added
+
+- `validate-config` reports what each `exclude_fragments` entry actually catches under each source root and warns about any entry that catches nothing. A silently inert safety control was the more dangerous half of the exclusion defect.
+- Stop reason `consecutive_failure_limit`, used when the run ends because failures reached the threshold. The last task's own failure is not promoted to the run's stop reason — that would report one bad task as the cause — and every failed task's cause is named in the Morning Report instead.
+- `execution.max_consecutive_failures` (default 3, range 1–20) — failures in a row that stop the run, reset by any success. `1` restores the previous behaviour where the first failure was terminal. `RUN_STATE.json` carries a `consecutive_failures` counter and the events log records each continuation and the limit being reached.
+- `RUN_PLAN.md` carries an "Exclusions in effect" section and an "Excluded as this tool's own output" section, so neither an inert exclusion nor a dropped candidate is invisible to the morning reader.
+
+### Changed
+
+- `validate-run` no longer treats `queue_exhausted` beside a non-empty failed list as a contradiction — under the new behaviour a completed queue may legitimately carry failed tasks. It now rejects the case that really is impossible: a run-ending failure recorded inside a run that reports its queue as exhausted.
+- Adding `execution.max_consecutive_failures` changes `config_sha256`. A plan frozen before this release refuses to execute against a configuration reloaded after it; re-plan rather than editing the frozen run.
+- A blank `exclude_fragments` entry is refused at configuration load. Under substring matching it is contained in every path and would silently empty a source root.
 
 ## [0.3.2] — 2026-09-07
 

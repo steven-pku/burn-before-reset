@@ -11,6 +11,7 @@ from typing import Any
 from .config import AppConfig, config_fingerprint
 from .indexer import index_all
 from .model import SourceRef, TaskSpec
+from .paths import audit_exclusions
 from .state import TASK_ID_PATTERN, freeze_queue, read_json, write_json_atomic, write_text_atomic
 
 
@@ -400,6 +401,7 @@ def _run_plan(
     records: list[SourceRef],
     tasks: list[dict[str, Any]],
     settled: list[tuple[TaskSpec, dict[str, Any]]] | None = None,
+    own_output: list[str] | None = None,
 ) -> str:
     settled = settled or []
     lines = [
@@ -435,7 +437,70 @@ def _run_plan(
                 "",
             ]
         )
-    return "\n".join(lines).rstrip() + "\n" + _settled_section(settled)
+    tail = _settled_section(settled) + _own_output_section(own_output or []) + _exclusion_section(config)
+    return "\n".join(lines).rstrip() + "\n" + tail
+
+
+def _own_output_section(own_output: list[str]) -> str:
+    """Name the candidates dropped as this tool's own exhaust.
+
+    A silent drop looks identical to never having found the file, and the failure
+    this guards is precisely the one that looked like ordinary completed work in
+    every receipt it produced.
+    """
+    if not own_output:
+        return ""
+    shown = sorted(own_output)
+    lines = [
+        "",
+        f"### Excluded as this tool's own output ({len(shown)} dropped)",
+        "",
+        "Worker transcripts and other files this tool wrote under `run.output_root` "
+        "are never source material. This holds by construction for every run sharing "
+        "the output root, not only the current one, and does not depend on "
+        "`exclude_fragments`.",
+        "",
+    ]
+    lines.extend(f"- `{path}`" for path in shown[:20])
+    if len(shown) > 20:
+        lines.append(f"- …and {len(shown) - 20} more")
+    return "\n".join(lines) + "\n"
+
+
+def _exclusion_section(config: AppConfig) -> str:
+    """What each `exclude_fragments` entry actually catches, per source root.
+
+    An entry that matches nothing reads exactly like one that is working. On
+    2026-09-08 a deliberately added exclusion was inert for a whole night and the
+    operator had no way to see it before launching.
+    """
+    lines = ["", "### Exclusions in effect", ""]
+    inert = 0
+    for source in config.sources:
+        lines.append(f"- `{source.root}` ({source.source_type})")
+        if not source.exclude_fragments:
+            lines.append("  - no `exclude_fragments` entries")
+            continue
+        audit = audit_exclusions(source.root, source.exclude_fragments)
+        if audit.truncated:
+            lines.append("  - walk stopped early; the counts below are a lower bound")
+        for fragment in source.exclude_fragments:
+            hits = audit.matches.get(fragment, [])
+            if hits:
+                example = hits[0]
+                lines.append(f"  - `{fragment}` → {len(hits)} match(es), e.g. `{example}`")
+            elif audit.truncated:
+                lines.append(f"  - `{fragment}` → no match found before the walk stopped early")
+            else:
+                inert += 1
+                lines.append(f"  - `{fragment}` → **matches nothing under this root**")
+    if inert:
+        lines.append("")
+        lines.append(
+            f"{inert} entr{'y' if inert == 1 else 'ies'} currently exclude nothing. An entry is "
+            "matched as a substring of the path relative to the source root, case-insensitively."
+        )
+    return "\n".join(lines) + "\n"
 
 
 def _ref_time(value: Any) -> datetime | None:
@@ -582,9 +647,10 @@ def _eligible_tasks(
     run_dir: Path,
     now: datetime,
     exclude_ids: frozenset[str] = frozenset(),
-) -> tuple[list[TaskSpec], list[TaskSpec], list[tuple[TaskSpec, dict[str, Any]]]]:
+) -> tuple[list[TaskSpec], list[TaskSpec], list[tuple[TaskSpec, dict[str, Any]]], list[str]]:
     """Index the sources as they are right now and pick this round's queue."""
-    records = index_all(config.sources)
+    own_output: list[str] = []
+    records = index_all(config.sources, exhaust_root=config.run.output_root, own_output=own_output)
     candidates = [_task_from_record(record, run_dir, now) for record in records]
     candidates.extend(_sweep_tasks(records, run_dir, now))
     prior = prior_completions(config, run_dir)
@@ -616,7 +682,7 @@ def _eligible_tasks(
     keep = {task.id for task in sweeps}
     shortlist = [task for task in eligible if task.id in keep or task in targeted]
     queued = _diversify(shortlist, config.execution.max_tasks)
-    return eligible, queued, settled
+    return eligible, queued, settled, own_output
 
 
 def _settled_section(settled: list[tuple[TaskSpec, dict[str, Any]]]) -> str:
@@ -655,7 +721,7 @@ def plan_followup_round(
     None when nothing new qualifies — the honest end of the night, not a failure.
     """
     current = now or datetime.now(tz=config.run.reset_at.tzinfo)
-    eligible, queued, settled = _eligible_tasks(config, run_dir, current, exclude_ids)
+    eligible, queued, settled, own_output = _eligible_tasks(config, run_dir, current, exclude_ids)
     if not queued:
         return None
     created_at = current.astimezone().isoformat(timespec="seconds")
@@ -670,13 +736,14 @@ def plan_followup_round(
         for index, task in enumerate(queued, 1):
             handle.write(f"{index}. `{task.id}` · score {task.score} · {task.title}\n")
         handle.write(_settled_section(settled))
+        handle.write(_own_output_section(own_output))
     return queue_name, queue["tasks_sha256"], queue["tasks"]
 
 
 def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
     current = now or datetime.now(tz=config.run.reset_at.tzinfo)
     run_dir = _new_run_dir(config, current)
-    eligible, queued, settled = _eligible_tasks(config, run_dir, current)
+    eligible, queued, settled, own_output = _eligible_tasks(config, run_dir, current)
     candidates = eligible
     created_at = current.astimezone().isoformat(timespec="seconds")
 
@@ -698,6 +765,7 @@ def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
         "task_status": {task.id: "queued" for task in queued},
         "completed": [],
         "failed": [],
+        "consecutive_failures": 0,
         "stop_reason": None,
         "source_mutation_detected": False,
         "source_movement_observed": False,
@@ -719,6 +787,7 @@ def plan_run(config: AppConfig, *, now: datetime | None = None) -> Path:
     write_text_atomic(run_dir / "CHECKPOINTS.md", "# Checkpoints\n\n")
     write_text_atomic(run_dir / "events.jsonl", "")
     write_text_atomic(
-        run_dir / "RUN_PLAN.md", _run_plan(config, run_dir, candidates, queue_tasks, settled)
+        run_dir / "RUN_PLAN.md",
+        _run_plan(config, run_dir, candidates, queue_tasks, settled, own_output),
     )
     return run_dir

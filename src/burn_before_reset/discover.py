@@ -40,7 +40,8 @@ class SourceProposal:
             f'type = "{self.source_type}"\n'
             f'root = "{self.root}"\n'
             f"extensions = {extensions}\n"
-            f'exclude_fragments = [".git", ".obsidian", "node_modules", "private", "finance", "health", "clients"]\n'
+            f'exclude_fragments = ["/.git/", "/.obsidian/", "/node_modules/", "private", '
+            f'"finance", "health", "clients"]\n'
         )
 
 
@@ -134,6 +135,9 @@ def render_proposals(proposals: list[SourceProposal]) -> str:
     lines = [
         "# Proposed read-only sources, most recently active first.",
         "# Review before use: drop anything sensitive, tighten exclude_fragments.",
+        "# exclude_fragments entries match as a case-insensitive substring of the path",
+        "# relative to root; a leading/trailing / anchors an entry to a whole segment.",
+        "# `bbr validate-config` counts what each one actually catches.",
         "",
     ]
     lines.extend(proposal.toml_block() for proposal in proposals)

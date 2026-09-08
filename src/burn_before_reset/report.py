@@ -78,7 +78,27 @@ def write_morning_report(run_dir: Path, state: dict[str, Any], queue: dict[str, 
         lines.append("None.")
     for task_id in sorted(failed):
         task = task_by_id.get(task_id, {"title": task_id})
-        lines.append(f"- `{task_id}` — {task['title']}")
+        result = (state.get("task_results") or {}).get(task_id) or {}
+        cause = result.get("error_type") or ("timed out" if result.get("timed_out") else "")
+        lines.append(f"- `{task_id}` — {task['title']}" + (f" ({cause})" if cause else ""))
+    run_ending = int(state.get("consecutive_failures", 0))
+    if failed:
+        lines.extend(
+            [
+                "",
+                "A failed task does not end the run on its own: a task timeout or worker error "
+                "books that task failed and dispatch moves to the next queued item, stopping when "
+                "failures in a row reach `execution.max_consecutive_failures`. "
+                + (
+                    f"At the stop, {run_ending} failure(s) stood in a row."
+                    if run_ending
+                    else "A later success cleared the streak, so the run did not end on failures."
+                )
+                + " Safety failures — billing, attributable source mutation, the deadline guard, "
+                "guard failure, an unconfirmed worker stop, an incomplete source check — still "
+                "stop the run where they occur.",
+            ]
+        )
     lines.extend(
         [
             "",

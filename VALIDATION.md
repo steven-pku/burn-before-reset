@@ -849,3 +849,209 @@ No new real model pilot, paid fallback, global installation, server-side balance
 - [GitHub Actions run 34044298883](https://github.com/steven-pku/burn-before-reset/actions/runs/34044298883) passed all seven jobs: lint plus Python 3.11–3.13 on Linux and macOS, including the no-model demo.
 - Repository About text was updated and independently read back. The public README loads the 1280×720 report image and 1200×640 terminal GIF successfully.
 - Social-preview replacement is the remaining presentation item: browser upload returned `Not allowed` because the extension lacks file access. The 1280×640 asset is ready; the existing remote social card remains unchanged. This does not alter the published code or Release.
+
+## 2026-09-08 · Three defects from a real overnight autopilot run
+
+Source: the 2026-09-08 overnight run against Steven's expiring subscription — runs
+`run-20260908-053335-3bcf6831` (run 1), `run-20260908-101302-a9f1945a` (the recovery attempt,
+SIGTERM-stopped at 10:16) and `run-20260908-101658-6c0d68b8` (run 3). Findings are ordered by
+severity as reported. This entry describes local repair and hermetic verification; it claims no
+new real model run, no release, and no human grading of the night's artifacts.
+
+### Finding 1 · `exclude_fragments` matched whole path components, not fragments
+
+`paths.py:75` and `:83` computed `relative_parts = {part.lower() for part in ...parts}` and tested
+`relative_parts & excluded`. A set intersection over whole components: an entry matched only a
+complete directory or file name, never a substring, despite the option's name and despite
+`examples/config.example.toml` and `discover.py` presenting entries (`attachments`, `node_modules`)
+that read as fragments.
+
+Two consequences, both observed. An exclusion added mid-run at 10:13 (`"burn-before-reset-runs"`)
+was inert, because the target directory name was
+`-Users-<user>-burn-before-reset-runs-run-20260908-053335-3bcf6831-staging-sweep-65ca12c4d10d`
+— the fragment is a substring of that segment, not the segment. And on `claude_sessions` /
+`codex_sessions` sources the semantics were not merely ineffective but inexpressible: Claude Code
+flattens a whole project path into one directory segment, so no whole-segment entry could say
+"exclude this project" there, while the same project-name entry *did* work on a markdown source
+rooted at the directory that holds the projects. One config line, different meanings by source
+type, with nothing telling the user.
+
+**Decision taken: change the semantics, keep the name** — this is D1 of the same day's DECISIONS
+entry "Two runner defects found by a real overnight run, and how to fix them" (commit `7ac6cfe`,
+which post-dates this branch's base `d450e82`); renaming was rejected there. Entries are now matched as a
+case-insensitive substring of the path relative to the source root. That is what the name and the
+documented examples already promised, it makes the session-source case expressible with the same
+line that works on a markdown source, and it only ever excludes more — never less — so no existing
+guard is weakened. The alternative (rename to `exclude_segments` and document the rule loudly) was
+rejected because it leaves the session case inexpressible, which the task required to be fixed.
+
+Substring matching has a cost the previous rule did not: an entry meant as a directory name starts
+catching longer names that contain it — a bare `.git` catches `.github/` as well as `.git/`, which
+would have quietly dropped `.github/**.md` from every existing git source. Writing a `/` at either
+end of an entry anchors it to a whole path segment, which restores that precision without giving up
+fragments elsewhere. It is one rule, not two: the text an entry is matched against is the relative
+path wrapped in separators, so the entry's own slashes do the anchoring. `/.git/` catches the `.git`
+directory at any depth and leaves `.github/` alone; a bare `finance` still catches the flattened
+session segment. The shipped example configuration and `discover` proposals now anchor their
+directory-name entries (`/.git/`, `/.obsidian/`, `/node_modules/`, `/vendor/`, `/dist/`, `/build/`)
+and leave the genuinely fragment-shaped ones unanchored.
+
+Because a silently inert exclusion is the real danger, three things now make matching visible:
+`validate-config` reports what each entry catches under each root and prints a warning naming any
+entry that catches nothing; `RUN_PLAN.md` carries an "Exclusions in effect" section with the same
+counts; and a blank entry is refused at configuration load, since under substring matching it is
+contained in every path and would silently empty a source root.
+
+**Measured exposure, stated no wider than it was.** At launch the operator claimed the run
+excluded several sensitive project categories by name. Enumerating `~/.claude/projects` at 10:18
+found **no** session directories for any of those categories at all. Exactly one directory would
+have been caught by a working exclusion: a single one of the operator's own project directories.
+The guard was broken; what it failed to guard was that one directory, not a class of financial or
+personal data.
+
+**Replay against the real session root** (read-only, directory names only, 155 directories):
+
+| entry | whole-segment (before) | substring (after) |
+|---|---|---|
+| `burn-before-reset-runs` | 0 | 55 |
+| `-staging-` | 0 | 84 |
+| one project name | 0 | 1 |
+| one category name | 0 | 0 |
+
+The replay also found a defect in the new audit itself: crediting only the first matching entry
+reported `burn-before-reset-runs` as matching nothing, because `-staging-` sorted ahead of it and
+claimed all 84 hits. The audit now credits every entry that matches, and
+`test_every_matching_entry_is_credited_not_only_the_first` pins it. An entry that is working must
+never be reported as inert — that is the whole point of the check.
+
+The audit walk is bounded. A walk that stops early reports that it did, in
+`validate-config` and in `RUN_PLAN.md`, and withholds the "matches nothing" verdict rather than
+printing a confident empty result over a partial walk — the same false-inert reading in a different
+disguise.
+
+Stated, not fixed: `_tree_snapshot` deliberately follows the indexer's allowlist, so a widened
+exclusion also widens what source-movement detection does not watch. That is the guard's documented
+scope, not a weakening, but the coupling is real.
+
+### Finding 2 · The planner selected the run's own worker transcripts
+
+Workers are pinned to `staging/<task-id>` as cwd, and Claude Code writes each worker's transcript to
+`~/.claude/projects/<flattened-cwd>/`. When `replan_when_queue_empty` fired, the indexer treated
+those as fresh `claude_sessions` candidates. Round 3 of run 1 queued `task-21ac41a1eeaa` — "Verify
+the unverified claim" against one of its own round-2 worker transcripts. It ran the full 900 s
+`task_timeout_seconds` and timed out. By 10:18 there were 45 such directories, and the audit of the
+night found **seven** further artifacts built against the same exhaust that had passed every
+validation gate and were reported as completed work.
+
+SECURITY.md documented an exclusion for exactly these directories, but scoped to source-movement
+detection only. That part worked — `source_write_attributable` was correctly `false`. The planner
+had no equivalent guard.
+
+**Fixed by construction, in the indexer rather than as a planner post-filter**, because Codex
+transcripts do not carry the flattened name (`~/.codex/sessions` is date-partitioned) and needed the
+parsed record. Two independent detectors, unioned so either alone suffices:
+
+1. **Location.** Inside `run.output_root`, or a path component whose flattened form equals the
+   flattened output root or begins with it plus a separator. Both sides are flattened with the same
+   `[^A-Za-z0-9] → -` rule, so a disagreement about any character class cannot make the check miss.
+2. **Declared working directory.** `session_meta.payload.cwd` for Codex, the first record's `cwd`
+   where a Claude transcript carries one. Read where present because it is exact; never relied on
+   alone because it is often absent — the real staging transcript's first record is a
+   `queue-operation` entry with no `cwd`.
+
+This covers **any** run under the configured output root, not only the current one, and does not
+depend on an operator-supplied exclusion. Drops are named in `RUN_PLAN.md` under "Excluded as this
+tool's own output"; a silent drop would look identical to never having found the file, which is
+exactly how this defect produced seven artifacts that looked like ordinary completed work.
+
+Replayed against the real session root: 55 directories detected for `~/burn-before-reset-runs`, a
+further 28 for a second output root `~/bbr-test-runs`, zero overlap, 72 left as genuine project
+sessions. The 55 are the same set the substring entry would have caught, reached without any
+exclusion being written.
+
+Two limits stated rather than hidden. The flattening is lossy — `/a/b/c` and `/a/b-c` collapse to
+the same name — so a sibling directory whose name extends the output root's with a separator
+(`~/runs-archive` beside `~/runs`) is excluded too; requiring the separator is the tightest rule the
+encoding supports, and `test_a_neighbour_directory_sharing_a_name_prefix_is_still_indexed` pins the
+boundary that *is* enforceable (`.../output` does not swallow `.../outputs`). The guard is scoped
+to the configured output root: an 84th `-staging-` directory on this machine belongs to a third
+output root used by an earlier exercise, and would be indexable by a run not configured to use it.
+And the marker flattens `output_root.resolve()` while the session directory's name comes from the
+worker's own working directory, which the kernel has already resolved — an inference from an
+encoding that is observed rather than published, not a documented guarantee. A configured output
+root reached through a symlink whose target the CLI spelled differently would not match by name;
+the location check still catches files actually inside the root.
+
+### Finding 3 · One task failure ended the whole run
+
+Run 1 had completed 43 tasks with zero failures when `task-21ac41a1eeaa` timed out at 10:11:23,
+stopping the run with `burn_pace.hours_remaining` 1.31 — 79 minutes of authorized window unused.
+
+Reading the code corrected the diagnosis before it was put to Steven: `runner.py` returned a
+terminal stop reason for **every** non-quota failure, so a single worker-reported error had the same
+effect as a timeout. Put to Steven as a decision card with the options and this evidence; he chose
+"记失败并继续，连续 N 次才停" over the timeouts-only alternative offered beside it. That widens D2 of
+the same day's recorded entry, which had approved continuing past a *timeout*; the widening is
+recorded as its own DECISIONS entry, including the one element of the card that was *not*
+implemented and why.
+
+A threshold stop is reported as `consecutive_failure_limit`, a stop reason of its own. Promoting the
+last task's failure to the run's stop reason would say a single bad task ended the run, which is the
+reading this change exists to correct; each failed task's own cause is named in the Morning Report's
+failed list instead. The five continuable classifications are consequently no longer reachable as
+*run* stop reasons, though they remain in `KNOWN_STOP_REASONS` so ledgers from earlier runs still
+validate.
+
+One point is open to reversal and recorded as such: the threshold is exposed as
+`execution.max_consecutive_failures` rather than hardcoded. A peer session argued for a constant on
+the grounds that this project does not add settings nobody asked for. The card Steven answered named
+the setting, and every other bound in this runner is configuration, so it was kept — a peer's
+argument is not authority over the user's own answer. Removing it is a one-line change.
+
+The continuation gate reads the raw task result, not the classified stop reason, because
+`_failure_stop_reason` returns the first match in priority order — a task that both timed out and
+failed its guard classifies as `task_timeout`, a continuable label over a condition that must never
+be continued past. Checked against the real receipt: the failing task carries `billing_error` false,
+`source_write_attributable` false, `deadline_stop` false, `descendant_cleanup_required` false,
+`guard_failed` false, `stop_confirmed` true and `source_check_completed` true, so the gate would have
+continued past the actual failure rather than a hypothetical one.
+
+Continuation requires both a continuable label and a clean raw result, so `worker_exception` is
+narrower than it reads: the result the supervisor synthesizes when `run_task` itself raises declares
+neither a confirmed worker stop nor a completed source check, and a supervisor-side crash therefore
+stays terminal. `test_worker_exception_finalizes_failed_run` passes unchanged against both
+implementations for that reason.
+
+`validate-run`'s "queue_exhausted contradicts a non-empty failed list" check was replaced rather
+than dropped: a completed queue may now legitimately carry failed tasks, but a *run-ending* failure
+recorded inside such a run still describes a transition this code cannot make, and that is what the
+check now rejects.
+
+### Validation
+
+- 184 hermetic unit/integration tests pass (167 before this work, 17 new); pinned ruff 0.16.5
+  passes; `quick_validate.py` reports a valid Skill; `git diff --check` passes.
+- Red/green, captured before the fixes. Against `HEAD` (`d450e82`) with the new tests in place:
+  `test_self_reference` both self-reference cases fail; `test_config` blank-entry case fails;
+  `test_cli` exclusion-warning case errors on the missing function; `test_consecutive_failures` two
+  of three fail (the third is the `max_consecutive_failures = 1` opt-out, which must pass on both
+  implementations and does). `test_paths`'s two fragment cases were captured failing separately,
+  after `audit_exclusions` existed and before the matching rule changed, since an import error would
+  otherwise have masked them.
+- The no-model first-use demo still creates and validates a real plan, leaves the source unchanged,
+  refuses execution and renders its labelled illustrative reports.
+- Three pre-existing tests were updated, each because the approved behaviour change made the old
+  assertion false rather than because it was inconvenient: the run-state schema now declares
+  `consecutive_failures`; `test_missing_final_agent_message_cannot_become_artifact` sets
+  `max_consecutive_failures = 1` to keep asserting the first-failure-terminal path; and the
+  `validate-run` corruption case now injects a run-ending failure beside `queue_exhausted`.
+- The morning report now names each failed task's cause and, when a run carried failures, states
+  whether it ended on a failure streak and how long that streak was. Both wordings were rendered and
+  read: a run that continued past a failure and finished its queue, and a run stopped at the limit.
+- This branch is based on `d450e82` and does not contain `7ac6cfe`, the commit carrying the D1–D3
+  decision entry. The entry was read from the main checkout rather than summarized second-hand, and
+  the implementation follows it. The two ledgers will need merging; nothing here rewrites the
+  recorded decision.
+- Not done, deliberately: no new real model run, no release, no tag, and no promotion. `AGENTS.md`,
+  `STATUS.md` and `archive/` were left untouched in the working tree on instruction — including the
+  `STATUS.md` update this project's own closeout rules would otherwise require.

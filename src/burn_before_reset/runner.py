@@ -13,6 +13,7 @@ from .planner import plan_followup_round
 from .report import write_morning_report
 from .report_html import write_html_report
 from .state import (
+    is_terminal_failure,
     read_json,
     validate_frozen_queue,
     write_json_atomic,
@@ -160,6 +161,31 @@ def _failure_stop_reason(result: dict[str, Any]) -> str:
     return "worker_failed"
 
 
+# Failures a run can absorb and keep going: the task is booked failed and the
+# next queued item is dispatched. On 2026-09-08 a run with 43 completions and
+# zero failures was ended by its 44th task timing out, 79 minutes before the
+# authorized hard stop. One task failing is a fact about that task; several in a
+# row is a fact about the night, and that count is the real stop condition.
+# (Approved by Steven, 2026-09-08 — see DECISIONS.md.)
+#
+# Membership here is necessary but not sufficient: `is_terminal_failure` is
+# checked against the raw result as well, so a label in this set sitting over a
+# terminal condition still ends the run. A supervisor-side crash is the case
+# that matters in practice — the result synthesized for it declares neither a
+# confirmed worker stop nor a completed source check, so `worker_exception`
+# appears here yet is terminal whenever the supervisor itself was the thing that
+# failed.
+CONTINUABLE_FAILURES = frozenset(
+    {
+        "task_timeout",
+        "worker_reported_error",
+        "invalid_worker_output",
+        "worker_exception",
+        "worker_failed",
+    }
+)
+
+
 THROTTLE_PROBE_MINUTES = 2.0
 
 
@@ -301,6 +327,8 @@ def _work_queue(
             if result["success"]:
                 state["task_status"][task_id] = "completed"
                 state["completed"].append(task_id)
+                # The threshold counts failures *in a row*; one success clears it.
+                state["consecutive_failures"] = 0
                 _event(run_dir / "events.jsonl", "task.completed", task_id=task_id)
                 _checkpoint(run_dir / "CHECKPOINTS.md", f"## {result['finished_at']} · {task_id} · completed")
                 write_json_atomic(run_dir / "RUN_STATE.json", state)
@@ -336,11 +364,14 @@ def _work_queue(
 
             state["task_status"][task_id] = "failed"
             state["failed"].append(task_id)
+            consecutive = int(state.get("consecutive_failures", 0)) + 1
+            state["consecutive_failures"] = consecutive
             _event(
                 run_dir / "events.jsonl",
                 "task.failed",
                 task_id=task_id,
                 error_type=result.get("error_type"),
+                consecutive_failures=consecutive,
             )
             state["source_mutation_detected"] = bool(result.get("source_write_attributable"))
             state["billing_error_detected"] = bool(result["billing_error"])
@@ -349,8 +380,42 @@ def _work_queue(
             state["guard_failure_detected"] = bool(result.get("guard_failed"))
             state["stop_unconfirmed_detected"] = not bool(result.get("stop_confirmed"))
             _checkpoint(run_dir / "CHECKPOINTS.md", f"## {result['finished_at']} · {task_id} · failed\n\n`{result}`")
+            reason = _failure_stop_reason(result)
+            if (
+                reason in CONTINUABLE_FAILURES
+                and not is_terminal_failure(result)
+                and consecutive < config.execution.max_consecutive_failures
+                and not _stop_requested
+            ):
+                # Book it failed and move on: the window is authorized and the rest
+                # of the queue is untouched by this task's problem.
+                _event(
+                    run_dir / "events.jsonl",
+                    "task.failed_continuing",
+                    task_id=task_id,
+                    stop_reason_if_final=reason,
+                    consecutive_failures=consecutive,
+                    limit=config.execution.max_consecutive_failures,
+                )
+                write_json_atomic(run_dir / "RUN_STATE.json", state)
+                break  # next task
+            if reason in CONTINUABLE_FAILURES and not is_terminal_failure(result):
+                # The threshold is the stop condition now, so it gets its own name.
+                # Reporting the last task's own failure here would say a single task
+                # ended the run — the exact reading this change exists to correct.
+                # The per-task cause stays in `task_results` and is named for every
+                # failed task in the Morning Report.
+                _event(
+                    run_dir / "events.jsonl",
+                    "run.consecutive_failure_limit",
+                    consecutive_failures=consecutive,
+                    limit=config.execution.max_consecutive_failures,
+                    last_failure=reason,
+                )
+                write_json_atomic(run_dir / "RUN_STATE.json", state)
+                return "consecutive_failure_limit"
             write_json_atomic(run_dir / "RUN_STATE.json", state)
-            return _failure_stop_reason(result)
+            return reason
 
         if _stop_requested:
             return "operator_stop"

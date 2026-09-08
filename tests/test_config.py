@@ -184,6 +184,17 @@ class ConfigTests(unittest.TestCase):
                     load_config(path)
 
 
+    def test_a_blank_exclusion_entry_is_refused(self) -> None:
+        """A blank entry is a substring of every path; it would empty the source."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            path = write_config(root / "config.toml", source, root / "output", exclude_fragments=(".git", "  "))
+            with self.assertRaises(ConfigError):
+                load_config(path)
+
+
 class ClaudeCliContractTests(unittest.TestCase):
     """`--safe-mode` is load-bearing; preflight must probe the installed CLI for it.
 

@@ -9,7 +9,13 @@ from pathlib import Path
 
 from .config import SourceSettings
 from .model import SourceRef
-from .paths import ExecutableError, iter_allowlisted_files, resolve_executable
+from .paths import (
+    ExecutableError,
+    is_own_output_location,
+    is_within,
+    iter_allowlisted_files,
+    resolve_executable,
+)
 
 SIGNALS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("todo", re.compile(r"(?:\bTODO\b|待办|未完成)", re.IGNORECASE)),
@@ -77,6 +83,47 @@ def _is_claude_session(text: str) -> bool:
         and isinstance(record.get("type"), str)
         and any(key in record for key in ("sessionId", "cwd", "uuid"))
     )
+
+
+def _declared_cwd(text: str) -> str | None:
+    """The working directory a session transcript records for itself, if any.
+
+    Codex writes it as `session_meta.payload.cwd`; a Claude transcript carries it
+    on some record shapes and not others. It is read where present because it is
+    exact, and never relied on alone because it is often absent.
+    """
+    first = text.splitlines()[0] if text.splitlines() else ""
+    try:
+        record = json.loads(first)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(record, dict):
+        return None
+    payload = record.get("payload")
+    for holder in (record, payload if isinstance(payload, dict) else {}):
+        value = holder.get("cwd")
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _is_own_output(path: Path, text: str, exhaust_root: Path) -> bool:
+    """Whether this file is something a run of this tool produced.
+
+    Two independent detectors, unioned so either one alone is enough: the file's
+    own location — including the flattened working-directory name a session
+    directory is given — and the working directory the transcript declares. On
+    2026-09-08 a re-planning round queued a task against a worker transcript from
+    round 2 of the same run; it burned the full task timeout, timed out, and
+    stopped the run 79 minutes early. Seven further tasks that night completed
+    against the same exhaust and were reported as validated work. Neither
+    detector depends on the operator having written an exclusion, and both cover
+    any run under `output_root`, not only the current one.
+    """
+    if is_own_output_location(path, exhaust_root):
+        return True
+    declared = _declared_cwd(text)
+    return bool(declared) and is_within(Path(declared), exhaust_root)
 
 
 def _signals_and_snippets(text: str, root: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -158,7 +205,19 @@ def _git_status(source: SourceSettings) -> SourceRef | None:
     )
 
 
-def index_source(source: SourceSettings) -> list[SourceRef]:
+def index_source(
+    source: SourceSettings,
+    *,
+    exhaust_root: Path | None = None,
+    own_output: list[str] | None = None,
+) -> list[SourceRef]:
+    """Index one source root.
+
+    `exhaust_root` is the run output root. Anything this tool wrote there — in
+    particular its own workers' session transcripts — is dropped by construction
+    rather than by an operator-supplied exclusion, and each drop is appended to
+    `own_output` so the run plan can name it instead of silently losing it.
+    """
     records: list[SourceRef] = []
     git_record = _git_status(source)
     if git_record:
@@ -180,6 +239,10 @@ def index_source(source: SourceSettings) -> list[SourceRef]:
         signals, snippets = _signals_and_snippets(text, source.root)
         if not signals:
             continue
+        if exhaust_root is not None and _is_own_output(path, text, exhaust_root):
+            if own_output is not None:
+                own_output.append(str(path.relative_to(source.root)))
+            continue
         records.append(
             SourceRef(
                 source_type=source.source_type,
@@ -195,8 +258,13 @@ def index_source(source: SourceSettings) -> list[SourceRef]:
     return records
 
 
-def index_all(sources: tuple[SourceSettings, ...]) -> list[SourceRef]:
+def index_all(
+    sources: tuple[SourceSettings, ...],
+    *,
+    exhaust_root: Path | None = None,
+    own_output: list[str] | None = None,
+) -> list[SourceRef]:
     records: list[SourceRef] = []
     for source in sources:
-        records.extend(index_source(source))
+        records.extend(index_source(source, exhaust_root=exhaust_root, own_output=own_output))
     return sorted(records, key=lambda item: (item.modified_at, item.path), reverse=True)

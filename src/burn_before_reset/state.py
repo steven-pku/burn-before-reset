@@ -91,3 +91,29 @@ def validate_frozen_queue(queue: dict[str, Any]) -> None:
         raise ValueError("frozen queue hash mismatch")
     for task in tasks:
         validate_task_spec(task)
+
+
+def is_terminal_failure(result: dict) -> bool:
+    """Failure conditions that end a run where they occur, whatever else is true.
+
+    Lives here because two callers must never let it drift: the runner decides
+    with it whether dispatch may continue past a failed task, and `validate_run`
+    uses the same rule to reject a ledger showing a run that continued past one.
+    A copy in each would eventually disagree, and the disagreement would show up
+    as a run that validated clean after continuing past a guard failure.
+
+    The raw result is checked rather than the classified stop reason: the
+    classifier returns the first match in priority order, so a task that both
+    timed out and failed its guard reads as `task_timeout` — a continuable label
+    over a condition that must never be continued past.
+    """
+    return bool(
+        result.get("billing_error")
+        or result.get("quota_exhausted")
+        or result.get("source_write_attributable")
+        or result.get("deadline_stop")
+        or result.get("descendant_cleanup_required")
+        or result.get("guard_failed")
+        or not result.get("stop_confirmed")
+        or not result.get("source_check_completed")
+    )

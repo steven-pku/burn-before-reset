@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from .state import read_json, validate_frozen_queue
+from .state import is_terminal_failure, read_json, validate_frozen_queue
 
 BASE_FILES = {
     "RUN_PLAN.md",
@@ -32,6 +32,7 @@ KNOWN_STOP_REASONS = frozenset(
         "worker_exception",
         "stop_unconfirmed",
         "worker_failed",
+        "consecutive_failure_limit",
         "drain_window",
         "worker_call_cap",
         "supervisor_exception",
@@ -127,8 +128,18 @@ def _semantic_errors(state: dict) -> list[str]:
             errors.append("stopped run has no stop reason")
         elif stop_reason not in KNOWN_STOP_REASONS:
             errors.append(f"unknown stop reason: {stop_reason}")
-        if stop_reason == "queue_exhausted" and failed:
-            errors.append("stop reason queue_exhausted contradicts a non-empty failed list")
+        # A run that worked through its whole queue may now carry failed tasks:
+        # since 2026-09-08 a task timeout or worker error books that task failed and
+        # dispatch continues (approved 2026-09-08). What stays impossible is a
+        # *safety* failure inside such a run — those end dispatch on the spot, so
+        # a ledger showing one alongside `queue_exhausted` did not happen.
+        if stop_reason == "queue_exhausted":
+            for task_id in failed:
+                result = results.get(task_id)
+                if isinstance(result, dict) and is_terminal_failure(result):
+                    errors.append(
+                        f"stop reason queue_exhausted contradicts a run-ending failure: {task_id}"
+                    )
         finished_at = _parse_stamp(state.get("finished_at"))
         if finished_at is None:
             errors.append("stopped run has no parseable finished_at")

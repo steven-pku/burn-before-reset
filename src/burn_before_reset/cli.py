@@ -14,6 +14,7 @@ from .burn import burn_report
 from .config import ConfigError, assert_execution_environment, load_config
 from .deadline import guard_process
 from .discover import discover_sources, render_proposals
+from .paths import audit_exclusions
 from .planner import plan_run
 from .report_html import generate_report
 from .runner import execute_run, install_supervisor_signals
@@ -64,8 +65,39 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _exclusion_audit(config) -> list[dict[str, object]]:
+    """Per source root, what each `exclude_fragments` entry actually catches.
+
+    An exclusion that matches nothing looks exactly like one that is working. On
+    2026-09-08 an entry added specifically to keep a directory out of the night
+    was inert, `validate-config` reported the configuration clean, and the run
+    read the directory anyway. Counting the matches here is what makes an inert
+    safety control visible before the window opens.
+    """
+    rows: list[dict[str, object]] = []
+    for source in config.sources:
+        audit = audit_exclusions(source.root, source.exclude_fragments)
+        rows.append(
+            {
+                "root": str(source.root),
+                "type": source.source_type,
+                "matches": {
+                    fragment: len(audit.matches.get(fragment, [])) for fragment in source.exclude_fragments
+                },
+                # A truncated walk cannot tell an inert entry from an unreached one,
+                # so it reports neither rather than a confident empty list.
+                "matching_nothing": [] if audit.truncated else [
+                    fragment for fragment in source.exclude_fragments if not audit.matches.get(fragment)
+                ],
+                "walk_truncated": audit.truncated,
+            }
+        )
+    return rows
+
+
 def _summary(config_path: Path) -> dict[str, object]:
     config = load_config(config_path)
+    exclusions = _exclusion_audit(config)
     return {
         "valid": True,
         "reset_at": config.run.reset_at.isoformat(),
@@ -73,14 +105,28 @@ def _summary(config_path: Path) -> dict[str, object]:
         "mode": config.run.mode,
         "sources": len(config.sources),
         "execution_enabled": config.execution.enabled,
+        "exclusions": exclusions,
     }
+
+
+def _warn_inert_exclusions(summary: dict[str, object]) -> None:
+    """Say it in the terminal too; a count buried in JSON is easy to read past."""
+    for row in summary.get("exclusions") or []:
+        for fragment in row.get("matching_nothing") or []:
+            print(
+                f"warning: exclude_fragments entry {fragment!r} matches nothing under {row['root']}; "
+                "entries are matched as a substring of the path relative to the source root",
+                file=sys.stderr,
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "validate-config":
-            print(json.dumps(_summary(args.config), indent=2))
+            summary = _summary(args.config)
+            print(json.dumps(summary, indent=2))
+            _warn_inert_exclusions(summary)
             return 0
         if args.command == "plan":
             config = load_config(args.config)

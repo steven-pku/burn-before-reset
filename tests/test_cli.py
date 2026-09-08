@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -96,6 +97,32 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(result, 0)
+
+
+class ExclusionWarningTests(unittest.TestCase):
+    """`validate-config` reported "clean" over an inert exclusion on 2026-09-08."""
+
+    def test_an_exclusion_that_matches_nothing_is_named_at_validate_time(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "note.md").write_text("TODO keep", encoding="utf-8")
+            config_path = write_config(
+                root / "config.toml",
+                source,
+                root / "output",
+                exclude_fragments=("note", "never-appears-anywhere"),
+            )
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                result = main(["validate-config", "--config", str(config_path)])
+            self.assertEqual(result, 0)
+            payload = json.loads(stdout.getvalue())
+            row = payload["exclusions"][0]
+            self.assertEqual(row["matches"]["note"], 1)
+            self.assertEqual(row["matching_nothing"], ["never-appears-anywhere"])
+            self.assertIn("never-appears-anywhere", stderr.getvalue())
 
 
 if __name__ == "__main__":

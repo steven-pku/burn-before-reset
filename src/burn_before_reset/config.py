@@ -71,6 +71,7 @@ class ExecutionSettings:
     max_tasks: int
     max_worker_calls_per_run: int
     task_timeout_seconds: int
+    max_consecutive_failures: int
     sigint_grace_seconds: float
     sigterm_grace_seconds: float
     provider_explicit: bool = False
@@ -288,6 +289,19 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
                 maximum=86400,
             )
         ),
+        # How many task failures in a row end the run. One task failing is a fact
+        # about that task; several in a row is a fact about the night. Set to 1 to
+        # restore the earlier behaviour where the first failure stopped the run.
+        # Safety stops — billing, source mutation, deadline, guard failure, an
+        # unconfirmed stop, an incomplete source check — never wait for a count.
+        max_consecutive_failures=int(
+            _finite_number(
+                execution_data.get("max_consecutive_failures", 3),
+                "execution.max_consecutive_failures",
+                minimum=1,
+                maximum=20,
+            )
+        ),
         sigint_grace_seconds=_finite_number(
             execution_data.get("sigint_grace_seconds", 20),
             "execution.sigint_grace_seconds",
@@ -328,6 +342,10 @@ def load_config(path: str | Path, *, now: datetime | None = None) -> AppConfig:
             raise ConfigError(f"sources[{index}].extensions must be a string list")
         if not isinstance(excludes_raw, list) or not all(isinstance(x, str) for x in excludes_raw):
             raise ConfigError(f"sources[{index}].exclude_fragments must be a string list")
+        # An entry is matched as a substring of the root-relative path, so a blank
+        # one is contained in every path and would silently empty the source.
+        if any(not x.strip() for x in excludes_raw):
+            raise ConfigError(f"sources[{index}].exclude_fragments must not contain a blank entry")
         max_bytes = int(row.get("max_file_bytes", 262144))
         if max_bytes < 1024 or max_bytes > 1_048_576:
             raise ConfigError("max_file_bytes must be between 1024 and 1048576")

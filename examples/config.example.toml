@@ -46,6 +46,12 @@ max_tasks = 3
 # re-planned rounds all count. This caps launches, not charges or token usage.
 max_worker_calls_per_run = 20
 task_timeout_seconds = 900
+# Task failures in a row that end the run. A single timeout or worker error books
+# that task failed and dispatch moves to the next queued item; this count is the
+# real stop condition. Set to 1 to make the first failure end the run. Safety
+# stops — billing, source mutation, deadline, guard failure, an unconfirmed stop,
+# an incomplete source check — never wait for the count.
+max_consecutive_failures = 3
 sigint_grace_seconds = 20
 sigterm_grace_seconds = 10
 
@@ -62,12 +68,20 @@ max_candidates = 50
 type = "markdown"
 root = "/absolute/path/to/allowed/notes"
 extensions = [".md"]
-exclude_fragments = [".git", ".obsidian", "attachments", "health", "finance", "clients", "private"]
+# Each entry is matched as a case-insensitive SUBSTRING of the path relative to
+# `root`, so "finance" excludes `Finance/`, `2026-finance-review.md`, and the
+# flattened session directory `-Users-me-Documents-Projects-Finance` alike. That
+# breadth is deliberate — an exclusion is a safety control, and over-excluding is
+# the safe direction. Write a `/` at either end to anchor an entry to a whole
+# path segment: `/.git/` excludes the `.git` directory at any depth and leaves
+# `.github/` alone, where a bare `.git` would catch both. Check the counts with
+# `bbr validate-config`; it warns about any entry that catches nothing.
+exclude_fragments = ["/.git/", "/.obsidian/", "attachments", "health", "finance", "clients", "private"]
 max_file_bytes = 262144
 
 [[sources]]
 type = "git"
 root = "/absolute/path/to/allowed/repository"
 extensions = [".md", ".py", ".ts", ".tsx", ".js", ".go", ".rs"]
-exclude_fragments = [".git", "node_modules", "vendor", "dist", "build"]
+exclude_fragments = ["/.git/", "/node_modules/", "/vendor/", "/dist/", "/build/"]
 max_file_bytes = 262144

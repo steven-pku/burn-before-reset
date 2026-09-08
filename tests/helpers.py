@@ -23,6 +23,11 @@ def write_config(
     safety: int = 15,
     mode: str = "safe",
     max_tasks: int = 3,
+    # Exclusion entries are matched as substrings, and a macOS temporary root
+    # resolves under /private — so a test whose fixture lives there must be able
+    # to drop the default `private` entry rather than have it swallow the tree.
+    exclude_fragments: tuple[str, ...] = (".git", "private"),
+    max_consecutive_failures: int = 3,
 ) -> Path:
     reset = reset_at or datetime.now(UTC) + timedelta(hours=3)
     path.write_text(
@@ -47,6 +52,7 @@ provider = "codex"
 codex_binary = "{codex_binary}"
 max_tasks = {max_tasks}
 task_timeout_seconds = 20
+max_consecutive_failures = {max_consecutive_failures}
 sigint_grace_seconds = 0.5
 sigterm_grace_seconds = 0.5
 
@@ -60,7 +66,7 @@ max_candidates = 50
 type = "{source_type}"
 root = "{source}"
 extensions = [".md", ".txt", ".jsonl", ".py"]
-exclude_fragments = [".git", "private"]
+exclude_fragments = {list(exclude_fragments)}
 max_file_bytes = 65536
 """,
         encoding="utf-8",
