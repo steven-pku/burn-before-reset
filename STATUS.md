@@ -2,7 +2,7 @@
 project_state: active
 stage: v0-3-public
 health: amber
-updated_at: 2026-09-08T23:10:00+08:00
+updated_at: 2026-09-19T22:30:00+08:00
 next_action_owner: user
 next_action: Steven grades the 10-artifact D3 sample from the 2026-09-08 overnight run; that is the only input that can move task_policy.minimum_score from a proxy to value.
 blocked_by: []
@@ -16,7 +16,7 @@ blocked_by: []
 - The project remains a public `candidate`, not a globally installed or `verified` Skill. This distinction is not a blocker to the public candidate release Steven approved.
 - Explicit reviewed-queue/autopilot selection, frozen configuration/deadline binding, an independent runtime ceiling, open-task filtering, Git worktree discovery and qualified report labels are implemented.
 - English and Chinese README, a no-model first-use demo, sample report screenshot, terminal GIF, contribution checks and security-report links are aligned with the release.
-- Private vulnerability reporting is enabled. The standard 1280×640 social-preview asset is included; the Settings page and file chooser now work, but both upload attempts failed with a GitHub attachment storage-request error. The 1280×640 RGB PNG passed local format inspection. No successful image replacement is claimed.
+- Private vulnerability reporting is enabled. The 1280×640 social preview is live: Steven confirmed the current card on the Settings page on 2026-09-19, and the public repository's `og:image` resolves to the user-uploaded image host keyed by this repository's id rather than to GitHub's generated card. The two earlier upload failures were client-side; `assets/social-preview.png` itself always met every documented requirement. GitHub exposes no API for this replacement, so it is not agent-reachable. See the dated VALIDATION entry.
 - Three defects from the first real overnight autopilot run (2026-09-08) are fixed on `main` and unreleased: `exclude_fragments` now matches substrings (`/`-anchored entries match whole segments) and `validate-config` counts what each entry catches; the planner drops the tool's own output by construction; one task failure no longer ends the run (`execution.max_consecutive_failures`, default 3). The Skill's morning-delivery and receipt-reading guidance was tightened from the same night. See CHANGELOG Unreleased and the two dated VALIDATION entries.
 
 ## Verification

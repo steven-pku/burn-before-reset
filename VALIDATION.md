@@ -1088,3 +1088,35 @@ human grading.
 - Not done, deliberately: no cross-run merged report feature (recorded as a gap in STATUS); the
   operator's local `AGENTS.md` rewrite and `archive/` were left uncommitted; `STATUS.md` was updated
   on top of the operator's own uncommitted correction line, which is included in the commit.
+
+## 2026-09-19 · Social preview closed out
+
+Source: a review of the two recorded upload failures, local inspection of the committed asset,
+GitHub's own documentation, and the public repository page. This entry claims no code change, no
+release, no new real model run and no human grading.
+
+- `assets/social-preview.png` meets every documented requirement and was never the cause of the
+  failures: IHDR reports 1280×640, 8-bit, colour type 2 (RGB), non-interlaced; the file is 593,282
+  bytes against GitHub's documented 1 MB limit; the chunk stream is `IHDR` + ten `IDAT` + `IEND`
+  with no ancillary chunks; the decompressed scanlines are the expected 2,458,240 bytes.
+  Recompressing the same pixels at zlib level 9 yields 596,480 bytes against the committed 593,117
+  bytes of `IDAT`, so the asset is already at or past ordinary optimisation.
+- GitHub exposes no REST or GraphQL endpoint for the social preview. The repository endpoints
+  reference and the customising-your-repository's-social-media-preview page both give
+  Settings → General → Social preview → Edit → Upload as the only path. The two recorded failures
+  were therefore client-side browser-automation failures — `Not allowed` from an extension without
+  file access, then an attachment storage-request error — not rejections of the image.
+- The public repository page returns `og:image =
+  https://repository-images.githubusercontent.com/1346355472/740f4449-1d23-435c-9b1b-17bfa24e9ba8`.
+  `1346355472` is this repository's id as returned by the API. That host serves user-uploaded
+  repository images; GitHub's generated card is served from `opengraph.githubassets.com`. A custom
+  social card is therefore set on the remote.
+- Steven opened the Settings page on 2026-09-19 and confirmed that the card shown there is correct.
+  That visual confirmation is the receipt for this item.
+- Not done: the live card was not byte-compared against the committed asset. This session's egress
+  policy denies `repository-images.githubusercontent.com` (403 on CONNECT), and the denial was
+  reported rather than routed around. The claim is that a correct custom card is live, not that its
+  bytes equal `assets/social-preview.png`.
+- Consequence for the ledger: the STATUS line stating that no successful image replacement was
+  claimed was accurate when written and is superseded by this entry. The item is no longer open and
+  is not agent-reachable; any further change to it is a Settings-page action by Steven.
