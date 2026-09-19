@@ -101,7 +101,7 @@ Codex’s standard sandbox constrains writes but does not provide a project-spec
 
 ## Current status
 
-**v0.3.2 — explicit execution modes and a no-model first-use demo.** See the [release notes](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.2) and [changelog](CHANGELOG.md).
+**v0.3.3 — the three defects the first real overnight run surfaced, repaired.** `exclude_fragments` matches fragments rather than whole path components, one task failure no longer ends the run (`execution.max_consecutive_failures`, default 3), and the planner no longer queues the run's own worker transcripts. **Upgrading invalidates plans frozen before this release — re-plan rather than editing a frozen run — and existing exclusion entries now exclude more, never less.** See the [release notes](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.3) and [changelog](CHANGELOG.md).
 
 One real overnight exercise completed **25 tasks and produced 27 artifacts across three runs**. The CLI reported **$71.38 in estimated usage cost**, and the provider eventually refused further work. This does not establish a zero remaining balance. Dollar estimates are not subscription charges, savings or artifact value; [Claude’s cost documentation](https://code.claude.com/docs/en/costs#using-the-usage-command) explains the distinction. Human usefulness grades remain outstanding.
 

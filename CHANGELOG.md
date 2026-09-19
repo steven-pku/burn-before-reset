@@ -10,6 +10,10 @@ record of what has actually been proven.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.3] — 2026-09-19
+
 ### Fixed
 
 - **`exclude_fragments` now matches fragments.** Entries were intersected against whole path components, so an entry only ever matched a complete directory or file name despite the option's name and documented examples. On a `claude_sessions` or `codex_sessions` source, where a whole project path is flattened into one directory segment, no entry could express "exclude this project" at all — the same config line behaved differently depending on source type, with nothing telling the user. Entries are now matched as a case-insensitive substring of the path relative to the source root. **This is a behaviour change: an existing configuration excludes more after upgrading, never less.** Writing a `/` at either end of an entry anchors it to a whole path segment, so an entry meant as a directory name keeps its old precision: `/.git/` excludes the `.git` directory at any depth and leaves `.github/` alone, where a bare `.git` now catches both. The shipped example configuration and `discover` proposals anchor their directory-name entries accordingly.
@@ -248,7 +252,9 @@ pilot are dated 2026-08-24 in `STATUS.md`.
   index.
 
 <!-- v0.1.0 has no git tag; it is the initial import commit 0fdd27e. Retag at release if wanted. -->
-[Unreleased]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/steven-pku/burn-before-reset/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/steven-pku/burn-before-reset/compare/0fdd27e...v0.2.0
