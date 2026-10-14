@@ -34,3 +34,5 @@ This tool has been through four external audit rounds. If you want to audit it, 
 ## Release consistency
 
 Before proposing a tag, run `python3 scripts/check.py --release-tag vX.Y.Z` with the intended version. Keep `pyproject.toml` and the release entry in `CHANGELOG.md` aligned. An Unreleased entry is not a published release.
+
+Build a wheel with `python3 -m pip wheel --no-deps . -w dist`, install it in a clean virtual environment, then run `scripts/check_install.py <checkout> <scratch-directory>` with that environment’s Python. This verifies the installed CLI with mock workers only, including a failed task and recovery in a new plan. Package the standalone Skill with `python3 scripts/package_skill.py --output dist`; it contains dereferenced resources, never the repository root. Publish the wheel, Skill ZIP and SHA-256 checksums beside the tagged source archive. CI runs on release tags as well as main and PRs.

@@ -1088,3 +1088,16 @@ human grading.
 - Not done, deliberately: no cross-run merged report feature (recorded as a gap in STATUS); the
   operator's local `AGENTS.md` rewrite and `archive/` were left uncommitted; `STATUS.md` was updated
   on top of the operator's own uncommitted correction line, which is included in the commit.
+
+
+## 2026-10-14 · v0.3.3 release validation
+
+- Existing checkout: `main` at `32af772`, with one pre-existing local `STATUS.md` edit. Work used an isolated local clone; the original checkout and its edit were left intact. GitHub main matched that commit; branch protection was disabled and the branch-rules API returned no rules.
+- The unreleased exclusion, self-output and consecutive-failure fixes remain covered by the 17 regressions and red/green evidence dated 2026-09-08 above. Baseline: 184 tests passed. No new model invocation or private-data execution was performed.
+- Confirmed distribution defect: both discovery links pointed to `../..`, including themselves below `.agents`/`.claude`. A cycle-detection regression failed twice on the old tree before attempting an unbounded copy. Fix: both surfaces point to a finite `skill/` resource directory, whose links never include the repository root. Its `SKILL.md` still resolves to the canonical root file.
+- Green: both Skill surfaces were copied with symlinks dereferenced to a fresh directory containing spaces; each independently ran the no-model demo from an unrelated cwd. A second test packages and extracts the Skill ZIP, checks absence of symlinks/cache/build metadata, then runs its demo. Two new distribution tests pass.
+- Full local suite: 186 tests passed on macOS with Python 3.11.15, 3.12.11 and 3.13.13. Pinned ruff 0.16.5 and `git diff --check` passed. Proposed `v0.3.3` matches package and changelog; `v0.3.2` is rejected.
+- A fresh virtual environment installed the wheel using `--no-index --no-deps`; `pip check` passed and metadata declares no runtime dependencies. The installed `bbr` command ran from a separate cwd with spaces and imported from site-packages. A mock worker failed once, then completed two tasks: exit 1 honestly preserved the failed task while stop reason was `queue_exhausted`. A new plan skipped those two unchanged successes and completed only the failed item. Both runs passed `validate-run`; source bytes stayed unchanged. `scripts/check_install.py` makes this check reproducible in CI.
+- First-use demo: actual plan validated, source unchanged, execution disabled, both English and Chinese illustrative report files generated. No account, model, quota or credentials were used.
+- CI now also builds/installs the wheel, runs the mock recovery check, packages the Skill and checks version consistency on tag pushes. Remote CI, tag and Release receipts are verified after publication and must not be inferred from these local results.
+- Release scope: v0.3.3 is a non-prerelease maintenance release of the public candidate. It does not claim verified lifecycle, global installation, new real model coverage, billing guarantees or human usefulness grades. Older frozen plans must be regenerated.

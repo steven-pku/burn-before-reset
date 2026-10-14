@@ -18,6 +18,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.release_tag:
         version = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
+        if f'## [{version}]' not in (ROOT / 'CHANGELOG.md').read_text():
+            parser.error('package version must have a CHANGELOG release entry')
         if args.release_tag != f'v{version}':
             parser.error(f'release tag must be v{version}')
     env = {**os.environ, 'PYTHONPATH': str(ROOT / 'src'), 'PYTHONDONTWRITEBYTECODE': '1'}

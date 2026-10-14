@@ -101,7 +101,7 @@ Codex’s standard sandbox constrains writes but does not provide a project-spec
 
 ## Current status
 
-**v0.3.2 — explicit execution modes and a no-model first-use demo.** See the [release notes](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.2) and [changelog](CHANGELOG.md).
+**v0.3.3 — working exclusions, self-output filtering, bounded task-failure continuation and copyable Skill distribution.** See the [release notes](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.3) and [changelog](CHANGELOG.md).
 
 One real overnight exercise completed **25 tasks and produced 27 artifacts across three runs**. The CLI reported **$71.38 in estimated usage cost**, and the provider eventually refused further work. This does not establish a zero remaining balance. Dollar estimates are not subscription charges, savings or artifact value; [Claude’s cost documentation](https://code.claude.com/docs/en/costs#using-the-usage-command) explains the distinction. Human usefulness grades remain outstanding.
 
@@ -117,7 +117,7 @@ Real Codex tasks and a live deadline stop have also been observed; `balanced` mo
 
 ## Agent support and repository layout
 
-Start Codex CLI or Claude Code in this checkout to discover the repository-scoped Skill. `.agents/skills/` and `.claude/skills/` link back to the root `SKILL.md`; no global installation is needed. Windows execution is not supported or covered by CI.
+Start Codex CLI or Claude Code in this checkout to discover the repository-scoped Skill. `.agents/skills/` and `.claude/skills/` point to the bounded `skill/` directory; no global installation is needed. To copy the Skill, dereference its resource links (for example, `cp -RL skill /path/to/skills/burn-before-reset`). Use the copied directory as the Skill root. The release Skill ZIP contains ordinary files, without symlinks. Run commands with an absolute path to `scripts/bbr.py` from any working directory, or install the wheel in a virtual environment and use `bbr`. Runtime dependencies are empty; building requires setuptools. Regenerate older plans after upgrading because the failure-limit setting changes the frozen configuration fingerprint. Windows execution is not supported or covered by CI.
 
 Codex workers use `codex exec` with the selected sandbox (`safe` or `balanced`). Claude workers support `safe` only, using `Read,Grep,Glob`, `--restricted`, `--safe-mode` and an empty strict MCP configuration. These flags serve different purposes: safe mode disables customizations; it does not itself remove built-in tools. They are documented in the [Claude CLI reference](https://code.claude.com/docs/en/cli-reference) as of 2026-09-06; preflight still checks the installed CLI for every required flag.
 

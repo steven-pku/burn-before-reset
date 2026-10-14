@@ -84,7 +84,7 @@ python3 scripts/bbr.py run --config config.local.toml --autopilot --execute
 
 ## 已有证据
 
-**v0.3.2** 带来了显式执行模式和无需调用模型的首次体验，详见 [Release](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.2)。一次真实通宵、三次运行，完成了 **25 个任务，形成 27 份产物**；CLI 回报的用量估算为 **$71.38**，随后供应商拒绝继续工作。这不证明余额归零，也不代表实际扣费、节省金额或成果价值。27 份产物的人工有用性评价仍待完成。
+**v0.3.3** 修复排除规则、自身产物扫描、单个任务失败导致整晚停止，以及 Skill 复制递归，详见 [Release](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.3)。一次真实通宵、三次运行，完成了 **25 个任务，形成 27 份产物**；CLI 回报的用量估算为 **$71.38**，随后供应商拒绝继续工作。这不证明余额归零，也不代表实际扣费、节省金额或成果价值。27 份产物的人工有用性评价仍待完成。
 
 测试覆盖和模拟演示不等于跨账号、跨环境的无人值守可靠性证明。详见 [验证台账](VALIDATION.md) 和 [变更记录](CHANGELOG.md)。
 
@@ -93,3 +93,7 @@ python3 scripts/bbr.py run --config config.local.toml --autopilot --execute
 普通问题通过 [Issues](https://github.com/steven-pku/burn-before-reset/issues) 提交；越界执行、意外计费等安全问题走 [私密漏洞报告](https://github.com/steven-pku/burn-before-reset/security/advisories/new)，请勿公开凭证、私人路径或会话记录。贡献检查见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 MIT — 见 [LICENSE](LICENSE)。
+
+## 安装与升级
+
+仓库中的 `.agents/skills/` 和 `.claude/skills/` 指向有限的 `skill/` 目录。复制时解析资源链接，例如 `cp -RL skill /path/to/skills/burn-before-reset`；Release 的 Skill ZIP 已包含普通文件，无软链接。以复制后的目录为 Skill 根目录。任意工作目录可用绝对路径运行 `scripts/bbr.py`，或在虚拟环境安装 wheel 后使用 `bbr`。运行时无第三方依赖，构建需要 setuptools。升级后须重新生成旧计划，新增失败上限会改变冻结配置指纹。任务失败继续执行不代表所有任务成功；计费、权限、来源改动或守卫异常仍立即停止，恢复前先读报告。

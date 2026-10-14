@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "burn-before-reset"
-version = "0.3.2"
+version = "0.3.3"
 description = "Turn expiring local AI quota into bounded, reviewable work before reset."
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -23,6 +23,7 @@ where = ["src"]
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+extend-exclude = ["skill"]  # resources link to canonical files already checked at the root
 
 [tool.ruff.lint]
 # S = flake8-bandit. A tool that fails closed on billing and paths should not
@@ -43,3 +44,4 @@ ignore = [
 "tests/*" = ["S101", "S108", "S607"]
 "scripts/bbr.py" = ["E402"]
 "scripts/demo.py" = ["E402"]
+"scripts/check_install.py" = ["E402", "S101"]
