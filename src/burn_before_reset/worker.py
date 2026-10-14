@@ -793,50 +793,54 @@ def run_task(config: AppConfig, task: dict[str, Any], run_dir: Path, entry_scrip
             except subprocess.TimeoutExpired:
                 pass
             raise
-        ready_deadline = time.monotonic() + 5
-        while not guard_ready_marker.exists() and time.monotonic() < ready_deadline:
-            if guard.poll() is not None:
-                break
-            time.sleep(0.05)
-        if not guard_ready_marker.exists():
-            stop_result, stop_confirmed = _stop_group(worker_pgid, config)
+        try:
+            ready_deadline = time.monotonic() + 5
+            while not guard_ready_marker.exists() and time.monotonic() < ready_deadline:
+                if guard.poll() is not None:
+                    break
+                time.sleep(0.05)
+            if not guard_ready_marker.exists():
+                stop_result, stop_confirmed = _stop_group(worker_pgid, config)
+                _terminate_process(guard)
+                try:
+                    worker.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
+                return {
+                    "task_id": task_id,
+                    "success": False,
+                    "return_code": -1,
+                    "timed_out": False,
+                    "source_changed": False,
+                    "source_write_attributable": False,
+                    "source_changed_paths": [],
+                    "worker_errors": [],
+                    "billing_error": False,
+                    "quota_exhausted": False,
+                    "burn": {"cost_usd": None, "input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0},
+                    "deadline_stop": False,
+                    "artifact": None,
+                    "started_at": started_at.isoformat(timespec="seconds"),
+                    "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                    "guard_ready": False,
+                    "guard_failed": True,
+                    "guard_exit_code": guard.poll(),
+                    "stop_confirmed": stop_confirmed,
+                    "stop_result": stop_result,
+                    "descendant_cleanup_required": False,
+                    "source_check_completed": False,
+                    "error_type": "GuardNotReady",
+                    "error_message": "deadline guard did not become ready",
+                }
+            write_text_atomic(start_worker_marker, "start\n")
+            supervision = _supervise_worker(worker, guard, worker_pgid, config, run_dir)
+        except BaseException:
+            _stop_group(worker_pgid, config)
             _terminate_process(guard)
             try:
                 worker.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
-            return {
-                "task_id": task_id,
-                "success": False,
-                "return_code": -1,
-                "timed_out": False,
-                "source_changed": False,
-                "source_write_attributable": False,
-                "source_changed_paths": [],
-                "worker_errors": [],
-                "billing_error": False,
-                "quota_exhausted": False,
-                "burn": {"cost_usd": None, "input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0},
-                "deadline_stop": False,
-                "artifact": None,
-                "started_at": started_at.isoformat(timespec="seconds"),
-                "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-                "guard_ready": False,
-                "guard_failed": True,
-                "guard_exit_code": guard.poll(),
-                "stop_confirmed": stop_confirmed,
-                "stop_result": stop_result,
-                "descendant_cleanup_required": False,
-                "source_check_completed": False,
-                "error_type": "GuardNotReady",
-                "error_message": "deadline guard did not become ready",
-            }
-        write_text_atomic(start_worker_marker, "start\n")
-        try:
-            supervision = _supervise_worker(worker, guard, worker_pgid, config, run_dir)
-        except BaseException:
-            _stop_group(worker_pgid, config)
-            _terminate_process(guard)
             raise
 
     after = {

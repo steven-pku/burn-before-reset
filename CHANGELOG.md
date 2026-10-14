@@ -8,9 +8,11 @@ Dates are the dates changes landed in this repository; the validation ledger in
 `VALIDATION.md` and the status ledger in `STATUS.md` remain the authoritative
 record of what has actually been proven.
 
-## [0.3.3] — 2026-10-14
+## [0.3.4] — 2026-10-14
 
 ### Fixed
+
+- Operator stop during guard readiness/start-marker handshake now stops and reaps both launcher and guard. Tag CI exposed this cleanup gap before any v0.3.3 Release was published; that tag is retained, without rewriting it.
 
 - Repository Skill discovery now targets a bounded `skill/` directory. Copying with symlink dereferencing no longer recurses through the repository root or includes Git metadata and private local files.
 

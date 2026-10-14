@@ -12,18 +12,18 @@ blocked_by: []
 
 ## Current state
 
-- v0.3.3 release preparation is complete: the previously unreleased runtime fixes, non-recursive Skill distribution, wheel installation/recovery checks, bilingual upgrade guidance and tag CI are aligned. Local evidence: 186 tests across Python 3.11–3.13, pinned lint, independent Skill copy/ZIP demos and an installed mock failure/recovery check. Publication receipts are checked against the remote after push. See the dated VALIDATION entry.
+- v0.3.4 release preparation is complete: the previously unreleased runtime fixes, non-recursive Skill distribution, wheel installation/recovery checks, bilingual upgrade guidance and tag CI are aligned. Local evidence: 187 tests across Python 3.11–3.13, pinned lint, independent Skill copy/ZIP demos and an installed mock failure/recovery check. Publication receipts are checked against the remote after push. See the dated VALIDATION entry.
 
 - [v0.3.2 is published](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.2). The annotated tag resolves to `7bc74bad29dc7da32464e15a2ab6201b9aaa3063`; [release CI](https://github.com/steven-pku/burn-before-reset/actions/runs/34044298883) passed all seven jobs.
 - The project remains a public `candidate`, not a globally installed or `verified` Skill. This distinction is not a blocker to the public candidate release Steven approved.
 - Explicit reviewed-queue/autopilot selection, frozen configuration/deadline binding, an independent runtime ceiling, open-task filtering, Git worktree discovery and qualified report labels are implemented.
 - English and Chinese README, a no-model first-use demo, sample report screenshot, terminal GIF, contribution checks and security-report links are aligned with the release.
 - Private vulnerability reporting is enabled. The standard 1280×640 social-preview asset is included; the Settings page and file chooser now work, but both upload attempts failed with a GitHub attachment storage-request error. The 1280×640 RGB PNG passed local format inspection. No successful image replacement is claimed.
-- Three defects from the first real overnight autopilot run (2026-09-08) are included in v0.3.3: `exclude_fragments` now matches substrings (`/`-anchored entries match whole segments) and `validate-config` counts what each entry catches; the planner drops the tool's own output by construction; one task failure no longer ends the run (`execution.max_consecutive_failures`, default 3). The Skill's morning-delivery and receipt-reading guidance was tightened from the same night. See CHANGELOG Unreleased and the two dated VALIDATION entries.
+- Three defects from the first real overnight autopilot run (2026-09-08) are included in v0.3.4: `exclude_fragments` now matches substrings (`/`-anchored entries match whole segments) and `validate-config` counts what each entry catches; the planner drops the tool's own output by construction; one task failure no longer ends the run (`execution.max_consecutive_failures`, default 3). The Skill's morning-delivery and receipt-reading guidance was tightened from the same night. See CHANGELOG Unreleased and the two dated VALIDATION entries.
 
 ## Verification
 
-- 186 hermetic unit/integration tests pass, including seventeen new regressions for the 2026-09-08 defects that fail against `d450e82`.
+- 187 hermetic unit/integration tests pass, including seventeen new regressions for the 2026-09-08 defects that fail against `d450e82`.
 - Pinned ruff 0.16.5 passes. The first-use demo validates its real plan, confirms unchanged source content and refuses execution; its illustrative reports are clearly labelled.
 - A fresh Codex process is used for repository Skill inventory and startup-log verification. Discovery does not prove reliable model triggering.
 - The published release was independently read back as non-draft and non-prerelease. About text is updated; README report and terminal GIF load on the public page. See the final dated entry in VALIDATION for receipts.
@@ -38,4 +38,4 @@ blocked_by: []
 
 ## One next action
 
-Steven grades the 10-artifact D3 sample from the 2026-09-08 run. Promotion with the v0.3.2 release link continues in parallel; v0.3.3 packages the fixes after their own release checks; no new model run or usefulness grade is claimed. Promotional drafts and private local evidence stay outside the public tree.
+Steven grades the 10-artifact D3 sample from the 2026-09-08 run. Promotion with the v0.3.2 release link continues in parallel; v0.3.4 packages the fixes after their own release checks; no new model run or usefulness grade is claimed. Promotional drafts and private local evidence stay outside the public tree.

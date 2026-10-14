@@ -1101,3 +1101,13 @@ human grading.
 - First-use demo: actual plan validated, source unchanged, execution disabled, both English and Chinese illustrative report files generated. No account, model, quota or credentials were used.
 - CI now also builds/installs the wheel, runs the mock recovery check, packages the Skill and checks version consistency on tag pushes. Remote CI, tag and Release receipts are verified after publication and must not be inferred from these local results.
 - Release scope: v0.3.3 is a non-prerelease maintenance release of the public candidate. It does not claim verified lifecycle, global installation, new real model coverage, billing guarantees or human usefulness grades. Older frozen plans must be regenerated.
+
+
+## 2026-10-14 · Startup-stop correction before v0.3.4
+
+- v0.3.3 main CI passed all eight jobs, but its tag CI failed on macOS/Python 3.13: the SIGTERM survival test reached a valid final report, then temporary-directory cleanup saw a guard still creating files. No v0.3.3 GitHub Release was created. The annotated tag is retained as a failed release attempt, without force-pushing or deleting it.
+- Root cause: guard creation had cleanup, and worker supervision had cleanup, but the readiness polling and start-marker write between them were outside the BaseException cleanup scope. An operator stop in that window left the launcher/guard alive.
+- A deterministic regression forces interruption during the readiness handshake while tracking the two real child processes. It fails against `976a640` with a live-child assertion and passes after the repair; its finally block also cleans the old-tree failure. The repaired exception path stops the worker group, terminates the guard and reaps the launcher before propagating the operator stop. No safety gate is loosened.
+- The release version moves to v0.3.4 so the already-pushed v0.3.3 tag never needs rewriting. All prior functional, installation and no-model validations still apply; full checks are repeated for the corrected tree, now 187 tests.
+
+- Corrected-tree results: all 187 tests passed on Python 3.11.15, 3.12.11 and 3.13.13; pinned lint and diff checks passed. The deterministic handshake interruption plus the SIGTERM survival integration test were each repeated ten times (20 passes total). The rebuilt v0.3.4 wheel again passed clean installation and mock continuation/recovery; the Skill ZIP copy/demo regressions passed in each full suite.

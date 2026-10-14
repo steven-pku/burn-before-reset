@@ -84,7 +84,7 @@ python3 scripts/bbr.py run --config config.local.toml --autopilot --execute
 
 ## 已有证据
 
-**v0.3.3** 修复排除规则、自身产物扫描、单个任务失败导致整晚停止，以及 Skill 复制递归，详见 [Release](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.3)。一次真实通宵、三次运行，完成了 **25 个任务，形成 27 份产物**；CLI 回报的用量估算为 **$71.38**，随后供应商拒绝继续工作。这不证明余额归零，也不代表实际扣费、节省金额或成果价值。27 份产物的人工有用性评价仍待完成。
+**v0.3.4** 修复排除规则、自身产物扫描、单个任务失败导致整晚停止，以及 Skill 复制递归，详见 [Release](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.4)。一次真实通宵、三次运行，完成了 **25 个任务，形成 27 份产物**；CLI 回报的用量估算为 **$71.38**，随后供应商拒绝继续工作。这不证明余额归零，也不代表实际扣费、节省金额或成果价值。27 份产物的人工有用性评价仍待完成。
 
 测试覆盖和模拟演示不等于跨账号、跨环境的无人值守可靠性证明。详见 [验证台账](VALIDATION.md) 和 [变更记录](CHANGELOG.md)。
 
