@@ -101,7 +101,7 @@ Codex’s standard sandbox constrains writes but does not provide a project-spec
 
 ## Current status
 
-**v0.3.4 — working exclusions, self-output filtering, bounded task-failure continuation and copyable Skill distribution.** See the [release notes](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.4) and [changelog](CHANGELOG.md).
+**v0.3.5 — quota retries preserve every process/source safety gate; version metadata is aligned.** See the [release notes](https://github.com/steven-pku/burn-before-reset/releases/tag/v0.3.5) and [changelog](CHANGELOG.md).
 
 One real overnight exercise completed **25 tasks and produced 27 artifacts across three runs**. The CLI reported **$71.38 in estimated usage cost**, and the provider eventually refused further work. This does not establish a zero remaining balance. Dollar estimates are not subscription charges, savings or artifact value; [Claude’s cost documentation](https://code.claude.com/docs/en/costs#using-the-usage-command) explains the distinction. Human usefulness grades remain outstanding.
 

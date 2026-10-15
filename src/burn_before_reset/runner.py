@@ -134,7 +134,7 @@ def _failure_stop_reason(result: dict[str, Any]) -> str:
         return "operator_stop"
     if result["billing_error"]:
         return "billing_or_auth_error"
-    if result.get("quota_exhausted"):
+    if result.get("quota_exhausted") and not is_terminal_failure(result, allow_quota_wait=True):
         # The allowance ran out. That is the window closing, not a fault.
         return "quota_exhausted"
     if result.get("source_write_attributable"):
@@ -337,6 +337,7 @@ def _work_queue(
             if (
                 result.get("quota_exhausted")
                 and config.run.wait_for_replenish
+                and not is_terminal_failure(result, allow_quota_wait=True)
                 and not _stop_requested
                 and not result["billing_error"]
                 and not result.get("source_write_attributable")
@@ -353,6 +354,7 @@ def _work_queue(
                     continue  # retry the same task
                 state["task_status"][task_id] = "failed"
                 state["failed"].append(task_id)
+                state["quota_exhausted"] = True
                 write_json_atomic(run_dir / "RUN_STATE.json", state)
                 if _stop_requested:
                     return "operator_stop"

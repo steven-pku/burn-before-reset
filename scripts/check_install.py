@@ -13,13 +13,14 @@ repo = Path(sys.argv[1]).resolve()
 sys.path.insert(0, str(repo))
 from importlib.metadata import metadata, version
 
-from burn_before_reset import cli
+from burn_before_reset import __version__, cli
 from tests.helpers import write_config
 from tests.test_consecutive_failures import FAKE_WORKER
 
 assert 'site-packages' in cli.__file__, cli.__file__
 import tomllib
 
+assert __version__ == version('burn-before-reset')
 assert version('burn-before-reset') == tomllib.loads((repo / 'pyproject.toml').read_text())['project']['version']
 assert not metadata('burn-before-reset').get_all('Requires-Dist')
 root = Path(sys.argv[2]).resolve()

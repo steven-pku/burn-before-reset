@@ -8,6 +8,20 @@ Dates are the dates changes landed in this repository; the validation ledger in
 `VALIDATION.md` and the status ledger in `STATUS.md` remain the authoritative
 record of what has actually been proven.
 
+## [Unreleased]
+
+## [0.3.5] — 2026-10-15
+
+### Fixed
+
+- A quota refusal combined with an unconfirmed process stop, descendant cleanup or an incomplete source check now stops the run instead of entering the replenishment retry path. The quota gate uses the shared terminal-failure predicate, ignoring only a clean quota refusal; safety causes take priority in the stop reason.
+- A clean quota wait that ends without retrying now records the quota flag in its final state. Successful replenishment retries remain supported.
+- The imported `__version__` matches distribution metadata. Release checks enforce it and require a changelog link for the release version; stale changelog compare links are corrected.
+
+### Validation
+
+- Independent Kimi K3 static review of immutable v0.3.4 commit `4533f16`, followed by Codex reproduction. A real mock worker emitting quota refusal text and leaving a child reproduced the safety-gate defect. Regressions cover the unsafe-quota matrix, interrupted clean quota waits and preserved clean quota recovery; no private data or real execution worker was used.
+
 ## [0.3.4] — 2026-10-14
 
 ### Fixed
@@ -252,7 +266,10 @@ pilot are dated 2026-08-24 in `STATUS.md`.
   index.
 
 <!-- v0.1.0 has no git tag; it is the initial import commit 0fdd27e. Retag at release if wanted. -->
-[Unreleased]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.2...v0.3.4
+[0.3.2]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/steven-pku/burn-before-reset/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/steven-pku/burn-before-reset/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/steven-pku/burn-before-reset/compare/0fdd27e...v0.2.0

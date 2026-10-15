@@ -93,10 +93,13 @@ def validate_frozen_queue(queue: dict[str, Any]) -> None:
         validate_task_spec(task)
 
 
-def is_terminal_failure(result: dict) -> bool:
+def is_terminal_failure(result: dict, *, allow_quota_wait: bool = False) -> bool:
     """Failure conditions that end a run where they occur, whatever else is true.
 
-    Lives here because two callers must never let it drift: the runner decides
+    `allow_quota_wait` ignores only the quota signal while deciding whether a
+    replenishment wait is safe; every process/source/billing gate still applies.
+
+    Lives here because callers must never let it drift: the runner decides
     with it whether dispatch may continue past a failed task, and `validate_run`
     uses the same rule to reject a ledger showing a run that continued past one.
     A copy in each would eventually disagree, and the disagreement would show up
@@ -109,7 +112,7 @@ def is_terminal_failure(result: dict) -> bool:
     """
     return bool(
         result.get("billing_error")
-        or result.get("quota_exhausted")
+        or (result.get("quota_exhausted") and not allow_quota_wait)
         or result.get("source_write_attributable")
         or result.get("deadline_stop")
         or result.get("descendant_cleanup_required")
